@@ -27,6 +27,7 @@ import { AdminLogPanel } from '@/src/components/admin/AdminLogPanel';
 import { MemberAdminPanel } from '@/src/components/admin/MemberAdminPanel';
 import { AdminOperationsPanel } from '@/src/components/admin/AdminOperationsPanel';
 import { AdminPointsPanel } from '@/src/components/admin/AdminPointsPanel';
+import { AdminDbResetPanel } from '@/src/components/admin/AdminDbResetPanel';
 import { GAME_MODE_CONFIG } from '@/src/constants/court';
 import { getEffectiveSchedule, getTodayKey, formatTodayLabel } from '@/src/utils/dateFormat';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
@@ -65,6 +66,7 @@ type AdminSection =
   | 'social'
   | 'points'
   | 'logs'
+  | 'system'
   | 'developer';
 
 interface AdminDashboardProps {
@@ -178,6 +180,7 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
     },
     { key: 'points', label: '포인트' },
     { key: 'courts', label: '코트' },
+    { key: 'system', label: '시스템' },
     { key: 'developer', label: '개발자' },
   ];
 
@@ -337,6 +340,12 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
               onToggle={() => setInfinitePoints(!infinitePoints)}
             />
           </Card>
+        </View>
+      )}
+
+      {section === 'system' && (
+        <View style={styles.sectionBody}>
+          <AdminDbResetPanel adminId={adminId} />
         </View>
       )}
 
