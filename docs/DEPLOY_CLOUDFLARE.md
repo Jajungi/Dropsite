@@ -62,11 +62,17 @@ GitHub 저장소 페이지에서 파일들이 보이면 성공입니다.
 | **Project name** | `dropsite` (원하는 이름, URL이 `dropsite.pages.dev` 가 됨) |
 | **Production branch** | `main` |
 | **Framework preset** | `None` (또는 No framework) |
-| **Build command** | `npx expo export -p web` |
+| **Build command** | `npm run build:web` |
 | **Build output directory** | `dist` |
 | **Root directory** | 비워두기 (기본 `/`) |
 
 > Framework preset을 Auto로 두면 잘못 잡힐 수 있어요. **반드시 None**.
+>
+> ⚠️ **Build command는 반드시 `npm run build:web`** 여야 합니다. 그냥 `npx expo export -p web`
+> 만 쓰면, Expo가 폰트를 `dist/assets/node_modules/...` 아래에 넣는데 Cloudflare Pages는
+> `node_modules` 폴더를 배포에서 제외해버려서 **아이콘/폰트가 전부 깨집니다.**
+> `npm run build:web` 은 export 후 `scripts/cloudflare-fixup.mjs` 를 돌려 이 폴더 이름을
+> 바꾸고 참조를 고쳐줍니다.
 
 ### 2-4. 환경 변수 (Environment variables) — 필수!
 
