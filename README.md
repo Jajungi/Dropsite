@@ -1,109 +1,193 @@
-# Drop · DI GIST 배드민턴 동아리 통합 예약 시스템
+# Drop · DGIST 배드민턴 동아리 통합 플랫폼
 
-React Native (Expo) 기반의 모바일·웹 동시 지원 배드민턴 동아리 예약 및 매칭 플랫폼입니다.
+> 코트 예약부터 매칭, 출석, 포인트, 레슨까지 — 배드민턴 동아리 운영을 한 곳에서.
+
+**Drop**은 DGIST 배드민턴 동아리를 위한 모바일·웹 통합 서비스입니다.
+활동 시간에 S1 체육관에서 벌어지는 모든 활동(코트 배정, 팀 매칭, 출석, 봉사, 레슨)을
+실시간으로 관리하고, 회원들의 기록과 랭킹을 자동으로 쌓아갑니다.
+
+React Native(Expo)로 만들어 **웹 브라우저·안드로이드·iOS에서 동일하게** 동작하며,
 백엔드는 Supabase(Postgres · Auth · Realtime · Storage)를 사용합니다.
 
-**배포 링크:** `https://<프로젝트명>.pages.dev` (Cloudflare Pages)
+---
 
-## 주요 기능
+## 이 서비스가 해결하는 문제
 
-- **활동 시간 기반 시스템 전환** — 활동 시간에만 예약/매칭 활성화
-- **위치 기반 인증** — 디지스트 S1 체육관 반경 500m 이내에서만 주요 기능 사용
-- **3×3 코트 현황판** — 9개 코트 실시간 상태, 게임 수 진행바, 합류/반납
-- **게스트 모드** — 이름만 입력해 임시 입장, 코트 예약·모집방 참여·이용 안내 열람 가능 (포인트·친구·랭크·기록은 제한)
-- **팀 빌딩 로비** — 친구 스케줄, 랭크 필터, 모집방
-- **마이페이지** — Elo 추이, 승률, 청소 기여 랭킹
-- **관리자 패널** — 회원 승인, 경기 결과 확정, 레슨 대기열, 알림 패널, 개발자 모드
-- **레슨 사이렌 알림** — 다음 차례 시 전체 화면 알림 + 진동
-- **실시간 동기화** — 코트·프로필·소셜·알림·포인트 등 Supabase Realtime 반영
+기존에는 코트 배정을 말로 정하고, 출석·회비·청소 당번을 수기로 관리했습니다.
+Drop은 이 과정을 디지털화해서:
 
-## 시작하기
+- **누가 어느 코트에서 무슨 경기를 하는지** 한눈에 보이게 하고
+- **먼저 온 사람이 공정하게 코트를 예약**하도록 포인트/피크타임 규칙을 적용하고
+- **출석·청소·네트 설치 같은 기여를 포인트로 보상**하며
+- **레슨 대기 순서를 자동으로 관리**해 혼선을 없앱니다.
+
+---
+
+## 핵심 개념
+
+### 활동 시간 (Activity Window)
+
+동아리 정규 활동은 **화·목 18:30–21:50**입니다.
+이 시간에만 예약·매칭 기능이 활성화되고, 그 외 시간에는 이용 안내 화면이 표시됩니다.
+
+### 위치 기반 인증 (Geofence)
+
+코트 예약·출석·봉사 인증 등 현장 활동은 **S1 체육관 반경 500m 이내**에서만 가능합니다.
+멀리서 코트를 미리 잡아두는 것을 방지합니다.
+
+### 포인트 경제
+
+코트 이용은 포인트를 소모하고, 동아리 기여는 포인트를 적립합니다.
+이를 통해 "기여한 사람이 더 편하게 코트를 쓰는" 선순환을 만듭니다.
+
+| 적립 | 포인트 |
+|------|--------|
+| 동아리비 납부 | +500 |
+| 출석 (정회원) | +150 |
+| 출석 (준회원) | +100 |
+| 청소·정리 | +100 |
+| 네트 설치·철거 / 셔틀콕 운반 | +100 |
+| 랭크전 승리 | +50 |
+
+| 사용 | 포인트 |
+|------|--------|
+| 일반 코트 예약 | −20 |
+| 센터 코트 예약 | −30 |
+| 셔틀콕 수령 | −20 |
+
+- **랭크 할인**: Gold +10% · Platinum +17% · Diamond +24% · Master +30% 예약 할인
+- **피크타임 제한**: 19·20시에는 1인 최대 2회 예약
+
+---
+
+## 주요 화면
+
+### 🏸 코트 예약 (`/`)
+
+- **3×3 = 9개 코트**를 무대·입구 방향까지 반영한 실제 체육관 배치로 표시
+- 각 코트의 실시간 상태(빈 코트 / 예약됨 / 경기 중 / 정리 중)와 진행 게임 수 표시
+- 코트를 탭하면 **인라인으로 확대**되어 참가자·경기 유형·예약 버튼이 나타남
+- **경기 유형** 선택: 난타 / 일반 / 랭크전
+  - 난타는 반코트만 사용 → 사용하지 않는 반쪽을 어둡게 시각화
+- 필터: 전체 / 예약 가능 / 내 코트
+- 합류 신청, 경기 시작·완료, 코트 반납, 점수 기록까지 지원
+
+### 👥 친구 (`/friends`)
+
+- 즐겨찾기한 친구 목록 — **체육관에 온 친구가 위로** 정렬
+- 친구의 도착 예정 시각을 크게 표시
+- 일정 타임라인으로 오늘 누가 언제 오는지 확인
+- 친구가 아니어도 **오늘 출석한 동아리원**을 아래에 표시
+- 친구 신청 / 수락 / 삭제
+
+### 🤝 파트너 모집 (`/lobby`)
+
+- 팀 모집방 생성·참여 (비밀번호 방 지원)
+- 랭크 조건 필터
+- 모인 팀을 그대로 코트에 예약
+
+### 📊 MY 기록 (`/profile`)
+
+- 프로필(아바타·랭크·등급), Elo·승률·총 게임 수
+- 출석 체크인 카드
+- 경기 전적 목록, Elo 추이 차트
+- 시간대별 체육관 혼잡도 차트
+- 청소·네트·셔틀콕 운반 봉사 인증
+- 포인트 적립/사용 내역
+
+### 📖 이용 안내 (`/guide`)
+
+- 코트 규격(6.1×13.4m), 네트·라인 설명
+- 배드민턴 규칙 FAQ, 인터랙티브 코트(단식/복식/서브 범위)
+- 포인트 정책, 매너, 회칙, 레슨 안내
+
+### 🛠 관리자 패널 (`/admin`)
+
+- 회원 가입 승인 / 등급·상태 관리
+- 경기 결과 확정, 포인트 조정
+- 레슨 대기열 관리, 알림 패널
+- 개발자 모드(위치 우회·무한 포인트 등 테스트용)
+
+---
+
+## 회원 등급
+
+| 등급 | 설명 |
+|------|------|
+| **게스트** | 이름만 입력한 임시 계정. 코트 예약·모집방 참여·이용 안내 열람만 가능 (포인트·친구·랭크·기록 제한) |
+| **준회원** | 가입 승인된 일반 회원 |
+| **정회원** | 회비 납부 등을 마친 정식 회원 (출석 포인트 우대) |
+| **관리자** | 운영진 — 승인·정산·경기 확정 권한 |
+
+가입은 **운영진 승인제**입니다. 승인 시 웰컴 포인트가 지급됩니다.
+
+---
+
+## 레슨 시스템
+
+코치 레슨은 대기열로 순서를 관리합니다.
+
+```
+신청(입금 전) → 관리자 입금 확인·승인 → 대기열 등록
+→ 내 차례(next) → 코치 코트 예약 → 레슨 중(active) → 완료
+→ 다음 사람에게 사이렌 알림
+```
+
+- 코치 코트(3번)는 **레슨 승인 + 본인 차례**인 회원만 예약 가능
+- 다음 차례가 되면 전체 화면 사이렌 알림 + 진동
+
+---
+
+## 기술 스택
+
+| 영역 | 기술 |
+|------|------|
+| 프레임워크 | Expo SDK 57 · Expo Router · React Native 0.86 |
+| 언어 | TypeScript |
+| 상태 관리 | Zustand |
+| 백엔드 | Supabase (Postgres · Auth · Realtime · Storage) |
+| 애니메이션 | React Native Reanimated |
+| 디바이스 | expo-location(지오펜스) · expo-haptics · expo-notifications |
+| 배포 | Cloudflare Pages (웹) · EAS Build (앱) |
+
+실시간 동기화(Supabase Realtime)로 코트·프로필·소셜·알림·포인트가 모든 접속자에게 즉시 반영됩니다.
+
+---
+
+## 개발자용 문서
+
+| 문서 | 내용 |
+|------|------|
+| [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md) | 전체 기능 명세·구현 상태 |
+| [docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md) | Supabase 설정 체크리스트 |
+| [docs/DEPLOY_CLOUDFLARE.md](docs/DEPLOY_CLOUDFLARE.md) | Cloudflare Pages 배포 가이드 |
+
+### 로컬 실행
 
 ```bash
 npm install
-npm start        # Expo 개발 서버
-npm run web      # 웹 (PWA)
+npm run web      # 웹
 npm run android  # Android
-npm run ios      # iOS (macOS 필요)
+npm run ios      # iOS (macOS)
 ```
 
-## Supabase 설정 (필수)
-
-클라우드 DB·인증·실시간 동기화. 상세 체크리스트: **[docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md)**
-
-1. [supabase.com](https://supabase.com)에서 프로젝트 생성 (리전: Seoul 권장)
-2. SQL Editor에서 마이그레이션 순서대로 실행:
-   - `supabase/migrations/001_initial_schema.sql`
-   - `supabase/migrations/002_storage_avatars.sql`
-   - `supabase/005_write_policies.sql` ~ `010_fix_anonymous_user_trigger.sql`
-3. `avatars` Storage 버킷 생성
-4. **Authentication → Providers → Anonymous sign-ins** 활성화 (게스트 모드용)
-5. `.env`에 URL·anon key 설정 후 `npx expo start -c`
+`.env`에 Supabase 연결 정보가 필요합니다:
 
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 ```
 
-## 온라인 배포 (Cloudflare Pages)
-
-GitHub 저장소를 Cloudflare Pages에 연결해 배포합니다.
-상세 가이드: **[docs/DEPLOY_CLOUDFLARE.md](docs/DEPLOY_CLOUDFLARE.md)**
-
-| 항목 | 값 |
-|------|-----|
-| Build command | `npx expo export -p web` |
-| Build output directory | `dist` |
-| 환경 변수 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `NODE_VERSION=20` |
-
-배포 후 Supabase → **Authentication → URL Configuration**의 Site URL을 배포 주소로 등록해야 로그인이 됩니다.
-
-### 로컬 개발용 동기화 서버 (Supabase 미사용 시)
-
-Supabase 없이 여러 기기를 맞추려면:
-
-```bash
-npm run server   # 터미널 1 — 동기화 서버
-npm run web      # 터미널 2 — .env에 EXPO_PUBLIC_SYNC_URL 설정
-```
-
-서버 없이도 **같은 브라우저 탭** 간에는 로컬 저장소로 자동 동기화됩니다.
-Supabase가 설정되면 sync-server는 사용하지 않습니다.
-
-## 앱 배포
-
-- **PWA** — 배포된 웹을 폰 브라우저에서 "홈 화면에 추가"
-- **Android APK** — `eas build --platform android --profile preview`
-- **스토어 출시** — `eas build` → `eas submit` (App Store / Play Store)
-
-## 프로젝트 구조
+### 프로젝트 구조
 
 ```
+app/            # 화면 (Expo Router) — (tabs), login
 src/
-  types/          # TypeScript 타입 정의
-  constants/      # 상수, 가이드 콘텐츠, 포인트 규칙
-  services/       # 비즈니스 로직 + Supabase 연동 (services/supabase)
-  stores/         # Zustand 상태 관리
-  hooks/          # 커스텀 훅
-  components/     # UI 컴포넌트
-  utils/          # 반응형·게스트 접근 등 유틸
-  theme/          # 디자인 토큰
-app/
-  (tabs)/         # 메인 탭 화면
-  login.tsx       # 로그인 / 회원가입 / 게스트
-supabase/         # SQL 마이그레이션
+  components/   # UI 컴포넌트
+  stores/       # Zustand 상태 (court, auth, lobby, lesson, friend, point ...)
+  services/     # 비즈니스 로직 + Supabase 연동 (services/supabase)
+  constants/    # 포인트 정책·코트 배치·가이드 콘텐츠
+  utils/        # 반응형·게스트 접근 등
+  theme/        # 디자인 토큰
+supabase/       # SQL 마이그레이션
 ```
-
-## 개발자 모드
-
-위치 인증 우회 등 테스트 기능은 **관리자 패널 → 개발자 모드**에서 토글합니다.
-(무한 포인트 모드, 데모 모드 등 — 실제 운영 시 꺼둔 상태 유지)
-
-## 기술 스택
-
-- Expo SDK 57 + Expo Router
-- TypeScript
-- Supabase (Postgres · Auth · Realtime · Storage)
-- Zustand (상태 관리)
-- React Native Reanimated (애니메이션)
-- expo-location (지오펜싱) · expo-haptics (햅틱)
