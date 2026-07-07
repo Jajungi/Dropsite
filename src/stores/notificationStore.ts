@@ -5,13 +5,135 @@ import {
   MOCK_CLEANING_LEADERBOARD,
 } from '@/src/services/mockData';
 import { calculateEloChange } from '@/src/services/elo';
-import { calculateWinPoints } from '@/src/services/points';
+import { calculateWinPoints, calculateCleaningPoints, calculateNetSetupPoints } from '@/src/services/points';
 import { useAuthStore } from './authStore';
 import { usePointStore } from './pointStore';
-import { applyPointChange } from '@/src/services/pointLedger';
+import { applyPointChange, applyPointChangeLocalOnly } from '@/src/services/pointLedger';
 import { persistAppState } from '@/src/services/appState';
 import { recordAdminLogAsActor } from '@/src/services/adminLog';
 import { pushLocalNotification } from '@/src/services/localNotifications';
+import { isSupabaseEnabled } from '@/src/lib/supabase';
+
+type NotificationGet = () => NotificationState;
+type NotificationSet = (
+  partial:
+    | Partial<NotificationState>
+    | ((state: NotificationState) => Partial<NotificationState>)
+) => void;
+
+/** 랭크전 확정/철회 후 대상 회원 전적·엘로를 프로필에 반영 (관리자 경로) */
+function syncMatchStatsRemote(userIds: string[]) {
+  if (!isSupabaseEnabled() || userIds.length === 0) return;
+  import('@/src/services/supabase/profiles')
+    .then(({ updateProfileStatsRemote }) => {
+      const users = useAuthStore.getState().users;
+      return Promise.all(
+        userIds.map((id) => {
+          const u = users.find((x) => x.id === id);
+          if (!u) return Promise.resolve();
+          return updateProfileStatsRemote(id, {
+            elo: u.elo,
+            rank: u.rank,
+            wins: u.wins,
+            losses: u.losses,
+            totalGames: u.totalGames,
+          });
+        })
+      );
+    })
+    .catch((err) => console.warn('[match] stats sync failed', err));
+}
+
+/** 경기 상태 변경(확정/취소/철회)을 Supabase 에 반영 (fire-and-forget) */
+function syncMatchPatchRemote(matchId: string, patch: Partial<MatchResult>) {
+  if (!isSupabaseEnabled()) return;
+  // 로컬 임시 id(match-...)는 서버에 없으므로 스킵 — insert 반환 uuid 로 치환된 경우만 반영
+  if (matchId.startsWith('match-')) return;
+  import('@/src/services/supabase/matches')
+    .then(({ updateMatchRemote }) => updateMatchRemote(matchId, patch))
+    .catch((err) => console.warn('[match] update failed', err));
+}
+
+/** 청소·네트·콕 인증을 서버 검증 RPC(rpc_submit_cleaning)로 저장 — 서버가 포인트 금액을 강제 */
+function syncCleaningRemote(
+  set: NotificationSet,
+  entry: CleaningSubmission
+) {
+  if (!isSupabaseEnabled()) return;
+  const kind = (entry.kind ?? 'cleaning') === 'net_setup' ? 'net_setup' : 'cleaning';
+  import('@/src/services/supabase/points')
+    .then(({ submitCleaningRemote }) =>
+      submitCleaningRemote(kind, entry.area, entry.participantCount ?? 1).then((remoteId) => {
+        if (!remoteId) return;
+        set((state) => ({
+          cleaningLeaderboard: state.cleaningLeaderboard.map((c) =>
+            c.id === entry.id ? { ...c, id: remoteId } : c
+          ),
+        }));
+      })
+    )
+    .catch((err) => console.warn('[cleaning] submit failed', err));
+}
+
+function revokeServiceSubmission(
+  get: NotificationGet,
+  set: NotificationSet,
+  submissionId: string,
+  adminId: string,
+  kind: 'cleaning' | 'net_setup',
+  reason: string
+) {
+  const entry = get().cleaningLeaderboard.find(
+    (c) => c.id === submissionId && !c.revokedAt && (c.kind ?? 'cleaning') === kind
+  );
+  if (!entry) {
+    return {
+      success: false,
+      message: kind === 'cleaning' ? '취소할 청소 기록을 찾을 수 없어요.' : '취소할 네트 기록을 찾을 수 없어요.',
+    };
+  }
+
+  const label = kind === 'cleaning' ? '청소 인증' : '네트 인증';
+  applyPointChange(entry.userId, -entry.points, 'admin', `${label} 취소 · ${reason}`);
+
+  if (kind === 'cleaning') {
+    useAuthStore.setState((state) => ({
+      users: state.users.map((u) =>
+        u.id === entry.userId
+          ? { ...u, cleaningContributions: Math.max(0, u.cleaningContributions - 1) }
+          : u
+      ),
+      currentUser:
+        state.currentUser?.id === entry.userId
+          ? {
+              ...state.currentUser,
+              cleaningContributions: Math.max(0, state.currentUser.cleaningContributions - 1),
+            }
+          : state.currentUser,
+    }));
+  }
+
+  const revokedAt = new Date().toISOString();
+  set((state) => ({
+    cleaningLeaderboard: state.cleaningLeaderboard.map((c) =>
+      c.id === submissionId ? { ...c, revokedAt, revokedBy: adminId } : c
+    ),
+  }));
+  if (isSupabaseEnabled() && !submissionId.startsWith('clean-') && !submissionId.startsWith('net-') && !submissionId.startsWith('cock-')) {
+    import('@/src/services/supabase/submissions')
+      .then(({ revokeCleaningRemote }) => revokeCleaningRemote(submissionId, adminId))
+      .catch((err) => console.warn('[cleaning] revoke failed', err));
+  }
+  recordAdminLogAsActor(adminId, {
+    category: 'point',
+    action: kind === 'cleaning' ? 'cleaning.revoke' : 'net_setup.revoke',
+    message: `${entry.userName} ${label} 취소 (${entry.area})`,
+    targetId: entry.userId,
+    targetName: entry.userName,
+  });
+  persistAppState();
+  return { success: true, message: `${label}을 취소하고 포인트를 회수했어요.` };
+}
 
 interface NotificationState {
   toasts: ToastMessage[];
@@ -46,6 +168,11 @@ interface NotificationState {
     adminId: string,
     reason?: string
   ) => { success: boolean; message: string };
+  adminRevokeNetSetup: (
+    submissionId: string,
+    adminId: string,
+    reason?: string
+  ) => { success: boolean; message: string };
   adminBroadcastNotice: (
     adminId: string,
     title: string,
@@ -60,6 +187,8 @@ interface NotificationState {
     gameMode?: GameMode
   ) => void;
   submitCleaning: (submission: Omit<CleaningSubmission, 'id' | 'submittedAt' | 'points'>) => void;
+  submitNetSetup: (submission: Omit<CleaningSubmission, 'id' | 'submittedAt' | 'points' | 'kind'>) => void;
+  submitShuttlecockCarry: (submission: Omit<CleaningSubmission, 'id' | 'submittedAt' | 'points' | 'kind'>) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: (userId?: string) => void;
   pushInbox: (n: Omit<AppNotification, 'id' | 'read' | 'createdAt'> & { id?: string }) => void;
@@ -148,9 +277,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         const { winnerChange } = calculateEloChange(user.elo, avgLoserElo);
         eloChanges[userId] = winnerChange;
         authStore.updateUserElo(userId, winnerChange);
-        const pts = calculateWinPoints(user.membershipTier, avgLoserElo, user.elo, true);
+        const pts = calculateWinPoints(true);
         if (pts > 0) {
-          applyPointChange(userId, pts, 'match_win', '랭크전 승리 (관리자 확정)', { matchId });
+          applyPointChange(userId, pts, 'match_win', '일반 랭킹전 승리 (팀원 지급)', { matchId });
         }
       }
     });
@@ -184,6 +313,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         m.id === matchId ? { ...m, ...patch } : m
       ),
     }));
+    syncMatchPatchRemote(matchId, patch);
+    if (isRanked) syncMatchStatsRemote([...winners, ...losers]);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.confirm',
@@ -213,6 +344,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         m.id === matchId ? { ...m, ...patch } : m
       ),
     }));
+    syncMatchPatchRemote(matchId, patch);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.cancel',
@@ -265,6 +397,8 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         m.id === matchId ? { ...m, ...patch } : m
       ),
     }));
+    syncMatchPatchRemote(matchId, patch);
+    if (isRanked) syncMatchStatsRemote([...winners, ...losers]);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.revoke',
@@ -277,44 +411,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   adminRevokeCleaning: (submissionId, adminId, reason = '운영진 취소') => {
-    const entry = get().cleaningLeaderboard.find(
-      (c) => c.id === submissionId && !c.revokedAt
-    );
-    if (!entry) {
-      return { success: false, message: '취소할 청소 기록을 찾을 수 없어요.' };
-    }
+    return revokeServiceSubmission(get, set, submissionId, adminId, 'cleaning', reason);
+  },
 
-    applyPointChange(entry.userId, -entry.points, 'admin', `청소 인증 취소 · ${reason}`);
-    useAuthStore.setState((state) => ({
-      users: state.users.map((u) =>
-        u.id === entry.userId
-          ? { ...u, cleaningContributions: Math.max(0, u.cleaningContributions - 1) }
-          : u
-      ),
-      currentUser:
-        state.currentUser?.id === entry.userId
-          ? {
-              ...state.currentUser,
-              cleaningContributions: Math.max(0, state.currentUser.cleaningContributions - 1),
-            }
-          : state.currentUser,
-    }));
-
-    const revokedAt = new Date().toISOString();
-    set((state) => ({
-      cleaningLeaderboard: state.cleaningLeaderboard.map((c) =>
-        c.id === submissionId ? { ...c, revokedAt, revokedBy: adminId } : c
-      ),
-    }));
-    recordAdminLogAsActor(adminId, {
-      category: 'point',
-      action: 'cleaning.revoke',
-      message: `${entry.userName} 청소 인증 취소 (${entry.area})`,
-      targetId: entry.userId,
-      targetName: entry.userName,
-    });
-    persistAppState();
-    return { success: true, message: '청소 인증을 취소하고 포인트를 회수했어요.' };
+  adminRevokeNetSetup: (submissionId, adminId, reason = '운영진 취소') => {
+    return revokeServiceSubmission(get, set, submissionId, adminId, 'net_setup', reason);
   },
 
   adminBroadcastNotice: (adminId, title, message) => {
@@ -369,23 +470,42 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       pendingMatches: [match, ...state.pendingMatches],
       matchHistory: [match, ...state.matchHistory],
     }));
+
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/matches')
+        .then(({ insertMatchRemote }) =>
+          insertMatchRemote(match).then((remoteId) => {
+            if (!remoteId) return;
+            set((state) => ({
+              pendingMatches: state.pendingMatches.map((m) =>
+                m.id === match.id ? { ...m, id: remoteId } : m
+              ),
+              matchHistory: state.matchHistory.map((m) =>
+                m.id === match.id ? { ...m, id: remoteId } : m
+              ),
+            }));
+          })
+        )
+        .catch((err) => console.warn('[match] insert failed', err));
+    }
     persistAppState();
   },
 
   submitCleaning: (submission) => {
     const authStore = useAuthStore.getState();
     const user = authStore.users.find((u) => u.id === submission.userId);
-    const points = user?.membershipTier === 'full' ? 18 : 15;
+    const points = calculateCleaningPoints();
 
     const newEntry: CleaningSubmission = {
       ...submission,
+      kind: 'cleaning',
       id: `clean-${Date.now()}`,
       submittedAt: new Date().toISOString(),
       points,
     };
 
     if (user) {
-      applyPointChange(user.id, points, 'cleaning', `청소 인증 · ${submission.area}`);
+      applyPointChangeLocalOnly(user.id, points, 'cleaning', `청소·정리 인증 · ${submission.area}`);
       useAuthStore.setState((state) => ({
         users: state.users.map((u) =>
           u.id === user.id ? { ...u, cleaningContributions: u.cleaningContributions + 1 } : u
@@ -401,8 +521,67 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     }
 
     set((state) => ({
-      cleaningLeaderboard: [newEntry, ...state.cleaningLeaderboard].slice(0, 10),
+      cleaningLeaderboard: [newEntry, ...state.cleaningLeaderboard].slice(0, 20),
     }));
+    syncCleaningRemote(set, newEntry);
+    persistAppState();
+  },
+
+  submitNetSetup: (submission) => {
+    const authStore = useAuthStore.getState();
+    const user = authStore.users.find((u) => u.id === submission.userId);
+    const points = calculateNetSetupPoints();
+
+    const newEntry: CleaningSubmission = {
+      ...submission,
+      kind: 'net_setup',
+      id: `net-${Date.now()}`,
+      submittedAt: new Date().toISOString(),
+      points,
+    };
+
+    if (user) {
+      applyPointChangeLocalOnly(
+        user.id,
+        points,
+        'net_setup',
+        `네트 설치·철거 인증 · ${submission.area}`
+      );
+    }
+
+    set((state) => ({
+      cleaningLeaderboard: [newEntry, ...state.cleaningLeaderboard].slice(0, 20),
+    }));
+    syncCleaningRemote(set, newEntry);
+    persistAppState();
+  },
+
+  submitShuttlecockCarry: (submission) => {
+    const authStore = useAuthStore.getState();
+    const user = authStore.users.find((u) => u.id === submission.userId);
+    const points = calculateNetSetupPoints();
+
+    const newEntry: CleaningSubmission = {
+      ...submission,
+      kind: 'net_setup',
+      id: `cock-${Date.now()}`,
+      submittedAt: new Date().toISOString(),
+      points,
+    };
+
+    if (user) {
+      applyPointChangeLocalOnly(
+        user.id,
+        points,
+        'net_setup',
+        `셔틀콕 운반 인증 · ${submission.area}`
+      );
+    }
+
+    set((state) => ({
+      cleaningLeaderboard: [newEntry, ...state.cleaningLeaderboard].slice(0, 20),
+    }));
+    syncCleaningRemote(set, newEntry);
     persistAppState();
   },
 
@@ -410,6 +589,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     set((state) => ({
       inbox: state.inbox.map((n) => (n.id === id ? { ...n, read: true } : n)),
     }));
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/notifications')
+        .then(({ markNotificationReadRemote }) => markNotificationReadRemote(id))
+        .catch((err) => console.warn('[notif] mark read failed', err));
+    }
     persistAppState();
   },
 
@@ -421,6 +605,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         return n;
       }),
     }));
+    if (isSupabaseEnabled() && userId) {
+      import('@/src/services/supabase/notifications')
+        .then(({ markAllNotificationsReadRemote }) => markAllNotificationsReadRemote(userId))
+        .catch((err) => console.warn('[notif] mark all read failed', err));
+    }
     persistAppState();
   },
 
@@ -436,6 +625,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       createdAt: new Date().toISOString(),
     };
     set((state) => ({ inbox: [item, ...state.inbox] }));
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/notifications')
+        .then(({ insertNotificationRemote }) => insertNotificationRemote(item))
+        .catch((err) => console.warn('[notif] insert failed', err));
+    }
     persistAppState();
   },
 }));

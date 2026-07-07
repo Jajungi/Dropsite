@@ -20,6 +20,7 @@ import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { getEffectiveSchedule } from '@/src/utils/dateFormat';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
+import { POINT_EARN } from '@/src/constants/points';
 import type { MembershipTier, MemberStatus, User } from '@/src/types';
 
 const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = {
@@ -67,6 +68,9 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
   const adminSetMemberStatus = useAuthStore((s) => s.adminSetMemberStatus);
   const adminSetLessonStatus = useAuthStore((s) => s.adminSetLessonStatus);
   const adminAdjustPoints = useAuthStore((s) => s.adminAdjustPoints);
+  const adminVerifyClubFee = useAuthStore((s) => s.adminVerifyClubFee);
+  const adminRevokeClubFee = useAuthStore((s) => s.adminRevokeClubFee);
+  const adminRevokeTransaction = usePointStore((s) => s.adminRevokeTransaction);
   const adminAdjustElo = useAuthStore((s) => s.adminAdjustElo);
   const adminSetAdminNote = useAuthStore((s) => s.adminSetAdminNote);
   const adminSendSystemNotice = useAuthStore((s) => s.adminSendSystemNotice);
@@ -292,6 +296,30 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
             </View>
           </Section>
 
+          <Section title="동아리비 · 포인트">
+            <Text style={styles.sectionHint}>
+              회비 인증: +{POINT_EARN.CLUB_FEE}P (웰컴 리워드) · 보유 {selected.points}P
+              {selected.clubFeeVerifiedAt ? ' · 회비 인증됨' : ''}
+            </Text>
+            <View style={styles.actionRow}>
+              {!selected.clubFeeVerifiedAt && selected.memberStatus === 'approved' && (
+                <Button
+                  title={`회비 납부 인증 (+${POINT_EARN.CLUB_FEE}P)`}
+                  size="sm"
+                  onPress={() => notify(adminVerifyClubFee(selected.id, adminId))}
+                />
+              )}
+              {selected.clubFeeVerifiedAt && (
+                <Button
+                  title="회비 인증 취소"
+                  size="sm"
+                  variant="danger"
+                  onPress={() => notify(adminRevokeClubFee(selected.id, adminId))}
+                />
+              )}
+            </View>
+          </Section>
+
           <Section title="포인트 · Elo 조정">
             <View style={styles.adjustRow}>
               <TextInput
@@ -393,9 +421,22 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
           {memberPoints.length > 0 && (
             <Section title="최근 포인트">
               {memberPoints.map((tx) => (
-                <Text key={tx.id} style={styles.logLine}>
-                  {tx.amount >= 0 ? '+' : ''}{tx.amount}P · {tx.description}
-                </Text>
+                <View key={tx.id} style={styles.logRow}>
+                  <Text style={styles.logLine}>
+                    {tx.amount >= 0 ? '+' : ''}{tx.amount}P · {tx.description}
+                    {tx.revokedAt ? ' (취소됨)' : ''}
+                  </Text>
+                  {!tx.revokedAt && tx.amount !== 0 && (
+                    <Button
+                      title="취소"
+                      size="sm"
+                      variant="ghost"
+                      onPress={() =>
+                        notify(adminRevokeTransaction(tx.id, adminId))
+                      }
+                    />
+                  )}
+                </View>
               ))}
             </Section>
           )}
@@ -677,5 +718,6 @@ const styles = StyleSheet.create({
   detailLine: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   detailLabel: { ...typography.caption, color: colors.textMuted },
   detailValue: { ...typography.caption, color: colors.text, fontWeight: '600' },
-  logLine: { ...typography.small, color: colors.textSecondary, lineHeight: 18 },
+  logLine: { ...typography.small, color: colors.textSecondary, lineHeight: 18, flex: 1 },
+  logRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

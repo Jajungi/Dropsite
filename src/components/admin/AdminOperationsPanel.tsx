@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Platform } from 'react-native';
 import { useLobbyStore } from '@/src/stores/lobbyStore';
 import { useCoachingStore } from '@/src/stores/coachingStore';
@@ -33,10 +33,13 @@ export function AdminOperationsPanel({
   const postAnnouncement = useCoachingStore((s) => s.postAnnouncement);
   const removeAnnouncement = useCoachingStore((s) => s.removeAnnouncement);
   const adminBroadcastNotice = useNotificationStore((s) => s.adminBroadcastNotice);
-  const approvedMembers = useAuthStore((s) =>
-    s.users.filter((u) => u.memberStatus === 'approved')
-  );
+  const users = useAuthStore((s) => s.users);
   const adminSetUserAtGym = useAuthStore((s) => s.adminSetUserAtGym);
+
+  const approvedMembers = useMemo(
+    () => users.filter((u) => u.memberStatus === 'approved'),
+    [users]
+  );
 
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeBody, setNoticeBody] = useState('');

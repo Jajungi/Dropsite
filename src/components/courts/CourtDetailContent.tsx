@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import type { Court, GameMode, NantaHalf } from '@/src/types';
 import { CourtIllustration } from './CourtIllustration';
 import { CourtPlayerProfiles } from './CourtPlayerProfiles';
@@ -11,6 +11,10 @@ import { GameModeBadge } from './GameModeBadge';
 import { Avatar } from '@/src/components/ui/Avatar';
 import { RankBadge } from '@/src/components/ui/RankBadge';
 import { Button } from '@/src/components/ui/Button';
+import { TouchGuard } from '@/src/components/ui/TouchGuard';
+import { useAuthStore } from '@/src/stores/authStore';
+import { useLessonStore } from '@/src/stores/lessonStore';
+import { isGuestUser } from '@/src/utils/guestAccess';
 import { colors, borderRadius, spacing, typography } from '@/src/theme';
 
 export interface CourtDetailContentProps {
@@ -19,6 +23,7 @@ export interface CourtDetailContentProps {
   onJoin: () => void;
   onCompleteGame: () => void;
   onReturnCourt: () => void;
+  onCancelReservation: () => void;
   onStartGame: () => void;
   onAcceptJoin: (requestId: string) => void;
   onRejectJoin: (requestId: string) => void;
@@ -29,6 +34,8 @@ export interface CourtDetailContentProps {
   courtPreviewWidth?: number;
   hideCourtPreview?: boolean;
   embedded?: boolean;
+  /** 확대 뷰 — 버튼 외 영역 탭 시 닫기 */
+  onDismiss?: () => void;
 }
 
 const STATUS_LABEL: Record<Court['status'], string> = {
@@ -44,6 +51,7 @@ export function CourtDetailContent({
   onJoin,
   onCompleteGame,
   onReturnCourt,
+  onCancelReservation,
   onStartGame,
   onAcceptJoin,
   onRejectJoin,
@@ -54,6 +62,7 @@ export function CourtDetailContent({
   courtPreviewWidth = 300,
   hideCourtPreview = false,
   embedded = false,
+  onDismiss,
 }: CourtDetailContentProps) {
   const [gameCount, setGameCount] = useState<number>(GAME_COUNT_OPTIONS[1]);
   const [gameMode, setGameMode] = useState<GameMode>('casual');
@@ -64,6 +73,17 @@ export function CourtDetailContent({
     setGameMode('casual');
     setNantaHalf('near');
   }, [court.id]);
+
+  const currentUserId = useAuthStore((s) => s.currentUser?.id);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const isGuest = isGuestUser(currentUser);
+  const canReserveCoachCourt = useLessonStore((s) => s.canReserveCoachCourt);
+  // 코치 코트는 기본 예약 불가 — 레슨 권한·차례가 된 사용자만 예약 가능
+  const coachReservable = court.isCoachCourt
+    ? currentUserId
+      ? canReserveCoachCourt(currentUserId).allowed
+      : false
+    : true;
 
   const canJoin = court.status === 'playing' && court.players.length >= 2 && court.players.length < 4;
   const floorColor = COURT_FLOOR_COLORS[court.status];
@@ -81,6 +101,9 @@ export function CourtDetailContent({
     .filter(Boolean)
     .join(' · ');
 
+  const guard = (node: React.ReactNode) =>
+    onDismiss ? <TouchGuard>{node}</TouchGuard> : node;
+
   const actionsBlock = (
     <View style={[styles.actions, embedded && styles.actionsEmbedded]}>
       {!canPerformActions && (
@@ -88,40 +111,81 @@ export function CourtDetailContent({
       )}
 
       {court.status === 'reserved' && isCurrentUserOnCourt && canPerformActions && (
-        <Button
-          title={`게임 시작 (${court.players.length}명)`}
-          onPress={onStartGame}
-          fullWidth
-          size="lg"
-        />
+        <>
+          {guard(
+            <Button
+              title={`게임 시작 (${court.players.length}명)`}
+              onPress={onStartGame}
+              fullWidth
+              size="lg"
+            />
+          )}
+          {isHost &&
+            guard(
+              <Button
+                title="예약 취소"
+                onPress={onCancelReservation}
+                fullWidth
+                size="md"
+                variant="ghost"
+                style={{ marginTop: spacing.sm }}
+              />
+            )}
+        </>
       )}
 
-      {canJoin && !isCurrentUserOnCourt && canPerformActions && (
-        <Button title="빈자리 합류 신청" onPress={onJoin} fullWidth size="lg" variant="outline" />
-      )}
+      {court.status === 'reserved' && !isCurrentUserOnCourt && isHost && canPerformActions &&
+        guard(
+          <Button
+            title="예약 취소"
+            onPress={onCancelReservation}
+            fullWidth
+            size="lg"
+            variant="outline"
+          />
+        )}
+
+      {canJoin && !isCurrentUserOnCourt && canPerformActions &&
+        guard(
+          <Button title="빈자리 합류 신청" onPress={onJoin} fullWidth size="lg" variant="outline" />
+        )}
 
       {court.status === 'playing' && isCurrentUserOnCourt && canPerformActions && (
         <>
-          <Button title="게임 1판 완료" onPress={onCompleteGame} fullWidth size="lg" />
-          <Button title="코트 반납" onPress={onReturnCourt} fullWidth size="md" variant="ghost" style={{ marginTop: spacing.sm }} />
+          {guard(<Button title="게임 1판 완료" onPress={onCompleteGame} fullWidth size="lg" />)}
+          {guard(
+            <Button
+              title="코트 반납"
+              onPress={onReturnCourt}
+              fullWidth
+              size="md"
+              variant="ghost"
+              style={{ marginTop: spacing.sm }}
+            />
+          )}
         </>
       )}
 
       {court.status === 'just_finished' && isCurrentUserOnCourt && canPerformActions && (
         <>
-          <Button title="코트 반납" onPress={onReturnCourt} fullWidth size="lg" />
-          <Button title="결과 기록 (선택)" onPress={onRecordScore} fullWidth size="sm" variant="ghost" style={{ marginTop: spacing.sm }} />
+          {guard(<Button title="코트 반납" onPress={onReturnCourt} fullWidth size="lg" />)}
+          {guard(
+            <Button
+              title="결과 기록 (선택)"
+              onPress={onRecordScore}
+              fullWidth
+              size="sm"
+              variant="ghost"
+              style={{ marginTop: spacing.sm }}
+            />
+          )}
         </>
       )}
     </View>
   );
 
-  return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.scrollContent, embedded && styles.scrollContentEmbedded]}
-      keyboardShouldPersistTaps="handled"
-    >
+  const content = (
+    <>
       {!hideCourtPreview && (
         <View style={styles.header}>
           <Text style={styles.title}>{court.id}번 코트</Text>
@@ -176,23 +240,37 @@ export function CourtDetailContent({
       </View>
       )}
 
-      {court.status === 'empty' && canPerformActions && (
+      {court.status === 'empty' && court.isCoachCourt && !coachReservable && (
+        <View style={[styles.infoBlock, embedded && styles.infoBlockEmbedded]}>
+          <Text style={styles.infoLine}>
+            <Text style={styles.infoBold}>코치 코트</Text> · 예약할 수 없어요
+          </Text>
+          <Text style={styles.infoSub}>레슨 권한 신청 후 대기 순서가 되면 코칭 화면에서 예약할 수 있어요.</Text>
+        </View>
+      )}
+
+      {court.status === 'empty' && canPerformActions && coachReservable && (
         <View style={[styles.reserveBlock, embedded && styles.reserveBlockEmbedded]}>
           <Text style={styles.blockTitle}>경기 유형</Text>
-          <GameModePicker
-            value={gameMode}
-            nantaHalf={nantaHalf}
-            onChange={setGameMode}
-            onNantaHalfChange={setNantaHalf}
-          />
+          {guard(
+            <GameModePicker
+              value={gameMode}
+              nantaHalf={nantaHalf}
+              onChange={setGameMode}
+              onNantaHalfChange={setNantaHalf}
+              disabledModes={isGuest ? ['ranked'] : undefined}
+            />
+          )}
           <Text style={[styles.blockTitle, { marginTop: spacing.sm }]}>게임 수</Text>
-          <GameCountPicker value={gameCount} onChange={setGameCount} />
-          <Button
-            title={`${gameCount}게임 예약하기`}
-            onPress={() => onReserve(gameCount, gameMode, gameMode === 'nanta' ? nantaHalf : undefined)}
-            fullWidth
-            size="lg"
-          />
+          {guard(<GameCountPicker value={gameCount} onChange={setGameCount} />)}
+          {guard(
+            <Button
+              title={`${gameCount}게임 예약하기`}
+              onPress={() => onReserve(gameCount, gameMode, gameMode === 'nanta' ? nantaHalf : undefined)}
+              fullWidth
+              size="lg"
+            />
+          )}
         </View>
       )}
 
@@ -242,8 +320,10 @@ export function CourtDetailContent({
             <View key={req.id} style={styles.requestRow}>
               <Text style={styles.playerName}>{req.userName}</Text>
               <View style={styles.requestActions}>
-                <Button title="수락" onPress={() => onAcceptJoin(req.id)} size="sm" />
-                <Button title="거절" onPress={() => onRejectJoin(req.id)} size="sm" variant="ghost" />
+                {guard(<Button title="수락" onPress={() => onAcceptJoin(req.id)} size="sm" />)}
+                {guard(
+                  <Button title="거절" onPress={() => onRejectJoin(req.id)} size="sm" variant="ghost" />
+                )}
               </View>
             </View>
           ))}
@@ -251,6 +331,22 @@ export function CourtDetailContent({
       )}
 
       {!embedded && actionsBlock}
+    </>
+  );
+
+  return (
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.scrollContent, embedded && styles.scrollContentEmbedded]}
+      keyboardShouldPersistTaps="handled"
+    >
+      {onDismiss ? (
+        <Pressable onPress={onDismiss} style={styles.dismissSurface}>
+          {content}
+        </Pressable>
+      ) : (
+        content
+      )}
     </ScrollView>
   );
 }
@@ -259,6 +355,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, paddingBottom: spacing.xxl },
   scrollContentEmbedded: { padding: spacing.md, paddingBottom: spacing.xl },
+  dismissSurface: { flexGrow: 1 },
   header: { marginBottom: spacing.md },
   compactStatus: {
     flexDirection: 'row',

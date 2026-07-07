@@ -1,11 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Court, TeamRoom } from '@/src/types';
+import { notifyCrossTabSync } from '@/src/services/crossTabSync';
+import { notifyServerSync } from '@/src/services/serverSync';
 
 const COURTS_KEY = '@badmin/courts';
 const ROOMS_KEY = '@badmin/rooms';
 
 export async function saveCourts(courts: Court[]): Promise<void> {
   await AsyncStorage.setItem(COURTS_KEY, JSON.stringify(courts));
+  notifyCrossTabSync();
+  notifyServerSync();
 }
 
 export async function loadCourts(): Promise<Court[] | null> {
@@ -20,6 +24,8 @@ export async function loadCourts(): Promise<Court[] | null> {
 
 export async function saveRooms(rooms: TeamRoom[]): Promise<void> {
   await AsyncStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
+  notifyCrossTabSync();
+  notifyServerSync();
 }
 
 export async function loadRooms(): Promise<TeamRoom[] | null> {

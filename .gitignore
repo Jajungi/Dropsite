@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# sync server local data
+server/data.json
+
 # Expo
 .expo/
 dist/
@@ -31,6 +34,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript

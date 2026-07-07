@@ -20,7 +20,7 @@ function todayKey() {
 }
 
 export function AppHeader() {
-  const { isDesktop, isMobile } = useLayoutMode();
+  const { isDesktop, isMobile, scale, isCompact, scaledTypography } = useLayoutMode();
   const currentUser = useAuthStore((s) => s.currentUser);
   const attendanceRecords = useAuthStore((s) => s.attendanceRecords);
   const checkIn = useAuthStore((s) => s.checkIn);
@@ -82,7 +82,7 @@ export function AppHeader() {
   };
 
   return (
-    <View style={[styles.header, isMobile && styles.headerMobile]}>
+    <View style={[styles.header, isMobile && styles.headerMobile, isCompact && styles.headerCompact]}>
       <View style={[styles.left, isMobile && styles.leftMobile]}>
         {isDesktop && (
           <Pressable
@@ -96,11 +96,22 @@ export function AppHeader() {
             <HamburgerIcon active={sidebarExpanded} />
           </Pressable>
         )}
-        <DropBrand compact={isMobile} />
+        <DropBrand compact={isMobile} scale={scale} />
         <View style={[styles.searchArea, isMobile && styles.searchAreaMobile]}>
-          <View style={[styles.searchWrap, isMobile && styles.searchWrapMobile, searchFocused && styles.searchWrapFocused]}>
+          <View
+            style={[
+              styles.searchWrap,
+              isMobile && styles.searchWrapMobile,
+              isMobile && { height: Math.round(34 * scale) },
+              searchFocused && styles.searchWrapFocused,
+            ]}
+          >
             <TextInput
-              style={[styles.searchInput, isMobile && styles.searchInputMobile]}
+              style={[
+                styles.searchInput,
+                isMobile && styles.searchInputMobile,
+                isMobile && { fontSize: scaledTypography.body.fontSize },
+              ]}
               placeholder={isMobile ? '검색' : '인원 검색'}
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
@@ -165,7 +176,7 @@ export function AppHeader() {
             accessibilityRole="button"
             accessibilityLabel={`${currentUser.name} 프로필`}
           >
-            <Avatar name={currentUser.name} color={currentUser.avatarColor} size={isMobile ? 30 : 32} imageUri={currentUser.avatarUri} />
+            <Avatar name={currentUser.name} color={currentUser.avatarColor} size={isMobile ? Math.round(30 * scale) : 32} imageUri={currentUser.avatarUri} />
             {!isMobile && (
               <Text style={styles.profileName} numberOfLines={1}>
                 {currentUser.name}
@@ -193,6 +204,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
+  },
+  headerCompact: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   left: {
     flex: 1,

@@ -38,7 +38,7 @@ export function MatchHistoryList({ userId }: { userId: string }) {
   const mine = matches.filter((m) => m.teamA.includes(userId) || m.teamB.includes(userId));
 
   if (mine.length === 0) {
-    return <Text style={styles.empty}>아직 기록된 전적이 없어요</Text>;
+    return <Text style={styles.empty}>아직 기록이 없어요</Text>;
   }
 
   return (

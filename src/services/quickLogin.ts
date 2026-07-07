@@ -1,42 +1,57 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const QUICK_LOGIN_KEY = '@badmin/quick-login';
+const SAVED_LOGIN_KEY = '@badmin/saved-login';
+const LEGACY_QUICK_LOGIN_KEY = '@badmin/quick-login';
 
-export interface QuickLoginEntry {
+export interface SavedLoginAccount {
   studentId: string;
   name: string;
   password: string;
 }
 
-const MAX_ENTRIES = 4;
+function isValidAccount(value: unknown): value is SavedLoginAccount {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.studentId === 'string' &&
+    typeof v.name === 'string' &&
+    typeof v.password === 'string'
+  );
+}
 
-export async function loadQuickLoginEntries(): Promise<QuickLoginEntry[]> {
-  const raw = await AsyncStorage.getItem(QUICK_LOGIN_KEY);
-  if (!raw) return [];
+async function migrateLegacyEntries(): Promise<SavedLoginAccount | null> {
+  const raw = await AsyncStorage.getItem(LEGACY_QUICK_LOGIN_KEY);
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as QuickLoginEntry[];
-    return Array.isArray(parsed) ? parsed.slice(0, MAX_ENTRIES) : [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed) && parsed.length > 0 && isValidAccount(parsed[0])) {
+      await AsyncStorage.removeItem(LEGACY_QUICK_LOGIN_KEY);
+      return parsed[0];
+    }
   } catch {
-    return [];
+    /* ignore */
   }
+  return null;
 }
 
-export async function saveQuickLoginEntry(entry: QuickLoginEntry): Promise<void> {
-  const existing = await loadQuickLoginEntries();
-  const filtered = existing.filter((e) => e.studentId !== entry.studentId);
-  const next = [entry, ...filtered].slice(0, MAX_ENTRIES);
-  await AsyncStorage.setItem(QUICK_LOGIN_KEY, JSON.stringify(next));
+/** 이 기기에 저장된 마지막 로그인 계정 (1개) */
+export async function loadSavedLogin(): Promise<SavedLoginAccount | null> {
+  const raw = await AsyncStorage.getItem(SAVED_LOGIN_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (isValidAccount(parsed)) return parsed;
+    } catch {
+      /* fall through */
+    }
+  }
+  return migrateLegacyEntries();
 }
 
-export async function removeQuickLoginEntry(studentId: string): Promise<void> {
-  const existing = await loadQuickLoginEntries();
-  const next = existing.filter((e) => e.studentId !== studentId);
-  await AsyncStorage.setItem(QUICK_LOGIN_KEY, JSON.stringify(next));
+export async function saveSavedLogin(account: SavedLoginAccount): Promise<void> {
+  await AsyncStorage.setItem(SAVED_LOGIN_KEY, JSON.stringify(account));
 }
 
-/** 데모·테스트용 원탭 계정 */
-export const DEMO_QUICK_ACCOUNTS: Pick<QuickLoginEntry, 'studentId' | 'name'>[] = [
-  { studentId: '20240001', name: '김민준' },
-  { studentId: '20240002', name: '이서연' },
-  { studentId: '20230001', name: '관리자' },
-];
+export async function clearSavedLogin(): Promise<void> {
+  await AsyncStorage.removeItem(SAVED_LOGIN_KEY);
+}

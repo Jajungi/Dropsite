@@ -6,7 +6,7 @@ import { useAuthStore, useAppStore } from '@/src/stores/authStore';
 import { useNotificationStore } from '@/src/stores/notificationStore';
 import { useGeoLocation } from '@/src/hooks/useGeoLocation';
 import { getWinRate } from '@/src/services/points';
-import { MOCK_ELO_HISTORY } from '@/src/services/mockData';
+import { ProfileEmptyState } from '@/src/components/profile/ProfileEmptyState';
 import { ProfileAvatarEditor } from '@/src/components/profile/ProfileAvatarEditor';
 import { ArrivalScheduleCard } from '@/src/components/profile/ArrivalScheduleCard';
 import { RankBadge } from '@/src/components/ui/RankBadge';
@@ -18,42 +18,35 @@ import { MatchHistoryList } from '@/src/components/profile/MatchHistoryList';
 import { AttendanceCard } from '@/src/components/profile/AttendanceCard';
 import { LessonApplyCard } from '@/src/components/profile/LessonApplyCard';
 import { PointsHistorySheet } from '@/src/components/profile/PointsHistorySheet';
+import { GuestProfileCard } from '@/src/components/profile/GuestProfileCard';
 import { PageContainer } from '@/src/components/layout/PageContainer';
+import { useLayoutMode } from '@/src/hooks/useLayoutMode';
 import { CLEANING_AREAS } from '@/src/constants';
+import { NET_SETUP_AREAS, SHUTTLECOCK_CARRY_AREAS, POINT_EARN, POINT_SPEND } from '@/src/constants/points';
 import { colors, spacing, typography, borderRadius, shadows, glass } from '@/src/theme';
-
-const HEADCOUNT_DATA = [
-  [8, 12, 18, 16, 10],
-  [14, 22, 28, 24, 15],
-  [6, 10, 14, 12, 8],
-];
-
-const MY_PRESENCE = [
-  [true, true, true, true, false],
-  [false, true, true, true, true],
-  [true, true, false, false, false],
-];
-
-const HEADCOUNT_LABELS = {
-  x: ['18:30', '19:00', '19:30', '20:00', '20:30'],
-  y: ['화', '목', '토'],
-};
 
 export default function ProfileScreen() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const logout = useAuthStore((s) => s.logout);
   const updateUserProfile = useAuthStore((s) => s.updateUserProfile);
   const checkGeoFence = useAppStore((s) => s.checkGeoFence);
-  const demoMode = useAppStore((s) => s.demoMode);
-  const setDemoMode = useAppStore((s) => s.setDemoMode);
   const cleaningLeaderboard = useNotificationStore((s) => s.cleaningLeaderboard);
   const submitCleaning = useNotificationStore((s) => s.submitCleaning);
+  const submitNetSetup = useNotificationStore((s) => s.submitNetSetup);
+  const submitShuttlecockCarry = useNotificationStore((s) => s.submitShuttlecockCarry);
+  const claimShuttlecock = useAuthStore((s) => s.claimShuttlecock);
   const showToast = useNotificationStore((s) => s.showToast);
+  const { isMobile, isNarrow, scale, scaledTypography, scaledSpacing } = useLayoutMode();
+  const isGuest = useAuthStore((s) => s.isGuestSession);
   useGeoLocation();
 
   const [showCleaning, setShowCleaning] = useState(false);
+  const [showNetSetup, setShowNetSetup] = useState(false);
   const [showPointsHistory, setShowPointsHistory] = useState(false);
   const [selectedArea, setSelectedArea] = useState(CLEANING_AREAS[0]);
+  const [selectedNetArea, setSelectedNetArea] = useState<string>(NET_SETUP_AREAS[0]);
+  const [showCockCarry, setShowCockCarry] = useState(false);
+  const [selectedCockArea, setSelectedCockArea] = useState<string>(SHUTTLECOCK_CARRY_AREAS[0]);
   const [participantCount, setParticipantCount] = useState('1');
 
   if (!currentUser) {
@@ -66,7 +59,34 @@ export default function ProfileScreen() {
     );
   }
 
+  if (isGuest) {
+    return (
+      <SafeAreaView style={styles.safe} edges={[]}>
+        <PageContainer>
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              isMobile && { padding: scaledSpacing.md, paddingBottom: spacing.xxl },
+            ]}
+          >
+            <GuestProfileCard
+              name={currentUser.name}
+              avatarColor={currentUser.avatarColor}
+              onLogout={() => {
+                void logout().then(() => router.replace('/login'));
+              }}
+            />
+          </ScrollView>
+        </PageContainer>
+      </SafeAreaView>
+    );
+  }
+
   const winRate = getWinRate(currentUser.wins, currentUser.losses);
+  const hasGameStats = currentUser.totalGames > 0;
+  const cleaningEntries = cleaningLeaderboard
+    .filter((e) => !e.revokedAt && (e.kind ?? 'cleaning') === 'cleaning')
+    .slice(0, 5);
 
   const handleCleaningSubmit = () => {
     if (!checkGeoFence()) {
@@ -84,31 +104,125 @@ export default function ProfileScreen() {
       participantCount: parseInt(participantCount, 10) || 1,
     });
     setShowCleaning(false);
-    showToast({ type: 'success', title: '청소 인증 완료!', message: '기여해주셔서 감사합니다 🧹' });
+    showToast({
+      type: 'success',
+      title: '청소 인증 완료!',
+      message: `+${POINT_EARN.CLEANING}P · 기여해주셔서 감사합니다 🧹`,
+    });
+  };
+
+  const handleNetSetupSubmit = () => {
+    if (!checkGeoFence()) {
+      showToast({
+        type: 'error',
+        title: '위치 인증 필요',
+        message: '체육관에서만 네트 인증이 가능해요!',
+      });
+      return;
+    }
+    submitNetSetup({
+      userId: currentUser.id,
+      userName: currentUser.name,
+      area: selectedNetArea,
+      participantCount: parseInt(participantCount, 10) || 1,
+    });
+    setShowNetSetup(false);
+    showToast({
+      type: 'success',
+      title: '네트 인증 완료!',
+      message: `+${POINT_EARN.NET_SETUP}P · 수고하셨습니다 🥅`,
+    });
+  };
+
+  const handleCockCarrySubmit = () => {
+    if (!checkGeoFence()) {
+      showToast({
+        type: 'error',
+        title: '위치 인증 필요',
+        message: '체육관에서만 콕 운반 인증이 가능해요!',
+      });
+      return;
+    }
+    submitShuttlecockCarry({
+      userId: currentUser.id,
+      userName: currentUser.name,
+      area: selectedCockArea,
+      participantCount: parseInt(participantCount, 10) || 1,
+    });
+    setShowCockCarry(false);
+    showToast({
+      type: 'success',
+      title: '콕 운반 인증 완료!',
+      message: `+${POINT_EARN.NET_SETUP}P · 감사합니다 🏸`,
+    });
+  };
+
+  const handleShuttlecockClaim = () => {
+    if (!checkGeoFence()) {
+      showToast({
+        type: 'error',
+        title: '위치 인증 필요',
+        message: '체육관에서만 셔틀콕을 수령할 수 있어요!',
+      });
+      return;
+    }
+    const r = claimShuttlecock(currentUser.id);
+    showToast({
+      type: r.success ? 'success' : 'warning',
+      title: r.success ? '셔틀콕 수령' : '',
+      message: r.message,
+    });
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
       <PageContainer>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.profileHeader}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          isMobile && { padding: scaledSpacing.md, paddingBottom: spacing.xxl },
+        ]}
+      >
+        <View
+          style={[
+            styles.profileHeader,
+            isMobile && styles.profileHeaderMobile,
+            isNarrow && styles.profileHeaderNarrow,
+          ]}
+        >
           <ProfileAvatarEditor
             name={currentUser.name}
             color={currentUser.avatarColor}
             imageUri={currentUser.avatarUri}
-            size={88}
+            size={isNarrow ? Math.round(56 * scale) : isMobile ? Math.round(64 * scale) : 88}
+            compact={isMobile}
             onChange={(uri) => {
-              const result = updateUserProfile(currentUser.id, { avatarUri: uri });
-              showToast({
-                type: result.success ? 'success' : 'warning',
-                title: '',
-                message: uri ? result.message : '프로필 사진을 삭제했어요.',
-              });
+              void (async () => {
+                const result = await updateUserProfile(currentUser.id, { avatarUri: uri });
+                showToast({
+                  type: result.success ? 'success' : 'warning',
+                  title: '',
+                  message: result.message,
+                });
+              })();
             }}
           />
           <View style={styles.profileInfo}>
-            <Text style={styles.name}>{currentUser.name}</Text>
-            <Text style={styles.studentId}>{currentUser.studentId}</Text>
+            <Text
+              style={[
+                styles.name,
+                isMobile && {
+                  fontSize: scaledTypography.h3.fontSize,
+                  lineHeight: scaledTypography.h3.lineHeight,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {currentUser.name}
+            </Text>
+            <Text style={[styles.studentId, isMobile && { fontSize: scaledTypography.caption.fontSize }]}>
+              {currentUser.studentId}
+            </Text>
             <View style={styles.badges}>
               <RankBadge rank={currentUser.rank} size="lg" />
               <View style={styles.tierBadge}>
@@ -120,26 +234,31 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View style={styles.statsGrid}>
-          <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{currentUser.elo}</Text>
-            <Text style={styles.statLabel}>Elo</Text>
+        <View style={[styles.statsGrid, isMobile && styles.statsGridMobile]}>
+          <Card style={[styles.statCard, isMobile && styles.statCardMobile]}>
+            <Text style={[styles.statValue, isMobile && statValueMobile(scaledTypography)]}>{currentUser.elo}</Text>
+            <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Elo</Text>
           </Card>
-          <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{winRate}%</Text>
-            <Text style={styles.statLabel}>승률</Text>
+          <Card style={[styles.statCard, isMobile && styles.statCardMobile]}>
+            <Text style={[styles.statValue, isMobile && statValueMobile(scaledTypography)]}>{hasGameStats ? `${winRate}%` : '—'}</Text>
+            <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>승률</Text>
           </Card>
           <Pressable
             onPress={() => setShowPointsHistory(true)}
-            style={({ pressed }) => [styles.statCard, styles.statCardPressable, pressed && styles.statCardPressed]}
+            style={({ pressed }) => [
+              styles.statCard,
+              isMobile && styles.statCardMobile,
+              styles.statCardPressable,
+              pressed && styles.statCardPressed,
+            ]}
           >
-            <Text style={styles.statValue}>{currentUser.points}P</Text>
-            <Text style={styles.statLabel}>포인트</Text>
+            <Text style={[styles.statValue, isMobile && statValueMobile(scaledTypography)]}>{currentUser.points}P</Text>
+            <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>포인트</Text>
             <Text style={styles.statHint}>내역 보기</Text>
           </Pressable>
-          <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{currentUser.totalGames}</Text>
-            <Text style={styles.statLabel}>총 게임</Text>
+          <Card style={[styles.statCard, isMobile && styles.statCardMobile]}>
+            <Text style={[styles.statValue, isMobile && statValueMobile(scaledTypography)]}>{currentUser.totalGames}</Text>
+            <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>총 게임</Text>
           </Card>
         </View>
 
@@ -162,61 +281,62 @@ export default function ProfileScreen() {
         </Card>
 
         <Card style={styles.section}>
-          <EloChart data={MOCK_ELO_HISTORY} width={320} />
+          <EloChart data={[]} />
         </Card>
 
         <Card style={styles.section}>
-          <HourlyHeadcountChart
-            data={HEADCOUNT_DATA}
-            myPresence={MY_PRESENCE}
-            labels={HEADCOUNT_LABELS}
-          />
+          <HourlyHeadcountChart />
         </Card>
 
         <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>🧹 이번 달 청소 기여왕 Top 5</Text>
-          {cleaningLeaderboard.slice(0, 5).map((entry, idx) => (
+          <Text style={styles.sectionTitle}>🧹 봉사 · 소모품</Text>
+          <Text style={styles.sectionHint}>
+            청소 +{POINT_EARN.CLEANING}P · 네트 +{POINT_EARN.NET_SETUP}P · 셔틀콕 -{POINT_SPEND.SHUTTLECOCK}P
+          </Text>
+          {cleaningEntries.length === 0 ? (
+            <ProfileEmptyState message="아직 청소 인증 기록이 없어요" />
+          ) : (
+            cleaningEntries.map((entry, idx) => (
             <View key={entry.id} style={styles.leaderRow}>
               <Text style={styles.rank}>{idx + 1}</Text>
               <Text style={styles.leaderName}>{entry.userName}</Text>
               <Text style={styles.leaderArea}>{entry.area}</Text>
               <Text style={styles.leaderPts}>+{entry.points}P</Text>
             </View>
-          ))}
-          <Button
-            title="청소 인증하기"
-            onPress={() => setShowCleaning(true)}
-            fullWidth
-            variant="outline"
-            style={{ marginTop: spacing.md }}
-          />
-        </Card>
-
-        <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>개발 · 테스트</Text>
-          <Pressable
-            onPress={() => setDemoMode(!demoMode)}
-            style={styles.demoRow}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: demoMode }}
-          >
-            <View style={styles.demoTextWrap}>
-              <Text style={styles.demoLabel}>데모 모드</Text>
-              <Text style={styles.demoHint}>
-                위치·활동 시간 제한 없이 전 기능 체험 (실제 배포 시 OFF)
-              </Text>
-            </View>
-            <View style={[styles.demoSwitch, demoMode && styles.demoSwitchOn]}>
-              <View style={[styles.demoKnob, demoMode && styles.demoKnobOn]} />
-            </View>
-          </Pressable>
+            ))
+          )}
+          <View style={styles.serviceActions}>
+            <Button
+              title={`청소 인증 (+${POINT_EARN.CLEANING}P)`}
+              onPress={() => setShowCleaning(true)}
+              fullWidth
+              variant="outline"
+            />
+            <Button
+              title={`네트 설치·철거 (+${POINT_EARN.NET_SETUP}P)`}
+              onPress={() => setShowNetSetup(true)}
+              fullWidth
+              variant="outline"
+            />
+            <Button
+              title={`콕 운반 (동방) (+${POINT_EARN.NET_SETUP}P)`}
+              onPress={() => setShowCockCarry(true)}
+              fullWidth
+              variant="outline"
+            />
+            <Button
+              title={`셔틀콕 수령 (-${POINT_SPEND.SHUTTLECOCK}P)`}
+              onPress={handleShuttlecockClaim}
+              fullWidth
+              variant="secondary"
+            />
+          </View>
         </Card>
 
         <Button
           title="로그아웃"
           onPress={() => {
-            logout();
-            router.replace('/login');
+            void logout().then(() => router.replace('/login'));
           }}
           fullWidth
           variant="ghost"
@@ -234,6 +354,70 @@ export default function ProfileScreen() {
         />
       )}
 
+      {showNetSetup && (
+        <View style={styles.cleaningModal}>
+          <View style={styles.cleaningSheet}>
+            <Text style={styles.modalTitle}>네트 설치 · 철거 인증</Text>
+            <Text style={styles.label}>작업 선택</Text>
+            <View style={styles.areaGrid}>
+              {NET_SETUP_AREAS.map((area) => (
+                <Pressable
+                  key={area}
+                  onPress={() => setSelectedNetArea(area)}
+                  style={[styles.areaChip, selectedNetArea === area && styles.areaChipActive]}
+                >
+                  <Text style={[styles.areaText, selectedNetArea === area && styles.areaTextActive]}>
+                    {area}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>참여 인원</Text>
+            <TextInput
+              style={styles.input}
+              value={participantCount}
+              onChangeText={setParticipantCount}
+              keyboardType="number-pad"
+            />
+            <View style={styles.modalActions}>
+              <Button title="취소" onPress={() => setShowNetSetup(false)} variant="ghost" />
+              <Button title="인증 제출" onPress={handleNetSetupSubmit} variant="secondary" />
+            </View>
+          </View>
+        </View>
+      )}
+      {showCockCarry && (
+        <View style={styles.cleaningModal}>
+          <View style={styles.cleaningSheet}>
+            <Text style={styles.modalTitle}>셔틀콕 운반 인증</Text>
+            <Text style={styles.label}>작업 선택</Text>
+            <View style={styles.areaGrid}>
+              {SHUTTLECOCK_CARRY_AREAS.map((area) => (
+                <Pressable
+                  key={area}
+                  onPress={() => setSelectedCockArea(area)}
+                  style={[styles.areaChip, selectedCockArea === area && styles.areaChipActive]}
+                >
+                  <Text style={[styles.areaText, selectedCockArea === area && styles.areaTextActive]}>
+                    {area}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>참여 인원</Text>
+            <TextInput
+              style={styles.input}
+              value={participantCount}
+              onChangeText={setParticipantCount}
+              keyboardType="number-pad"
+            />
+            <View style={styles.modalActions}>
+              <Button title="취소" onPress={() => setShowCockCarry(false)} variant="ghost" />
+              <Button title="인증 제출" onPress={handleCockCarrySubmit} variant="secondary" />
+            </View>
+          </View>
+        </View>
+      )}
       {showCleaning && (
         <View style={styles.cleaningModal}>
           <View style={styles.cleaningSheet}>
@@ -270,6 +454,13 @@ export default function ProfileScreen() {
   );
 }
 
+function statValueMobile(scaledTypography: ReturnType<typeof useLayoutMode>['scaledTypography']) {
+  return {
+    fontSize: scaledTypography.bodyBold.fontSize,
+    lineHeight: scaledTypography.bodyBold.lineHeight,
+  } as const;
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.md, paddingBottom: spacing.xxl },
@@ -285,6 +476,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.sm,
   },
+  profileHeaderMobile: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  profileHeaderNarrow: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+  },
   profileInfo: { flex: 1, justifyContent: 'center' },
   name: { ...typography.h2, color: colors.text },
   studentId: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
@@ -297,7 +498,15 @@ const styles = StyleSheet.create({
   },
   tierText: { ...typography.small, color: colors.primary },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.lg },
-  statCard: { width: '47%', alignItems: 'center', padding: spacing.lg },
+  statsGridMobile: { gap: spacing.sm, marginBottom: spacing.md },
+  statCard: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    maxWidth: '49%',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  statCardMobile: { padding: spacing.sm, flexBasis: '48%', maxWidth: '50%' },
   statCardPressable: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,
@@ -308,8 +517,11 @@ const styles = StyleSheet.create({
   statHint: { ...typography.small, color: colors.primary, marginTop: 2, fontSize: 10 },
   statValue: { ...typography.h2, color: colors.text },
   statLabel: { ...typography.label, color: colors.textMuted, marginTop: spacing.xs, textTransform: 'none' },
+  statLabelMobile: { fontSize: 11, marginTop: 2 },
   section: { marginBottom: spacing.lg },
   sectionTitle: { ...typography.bodyBold, color: colors.text, marginBottom: spacing.md, fontSize: 16 },
+  sectionHint: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.sm },
+  serviceActions: { gap: spacing.sm, marginTop: spacing.md },
   scheduleHint: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.sm },
   scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   scheduleInput: {
@@ -368,29 +580,4 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.lg },
-  demoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  demoTextWrap: { flex: 1, gap: 4 },
-  demoLabel: { ...typography.bodyBold, color: colors.text },
-  demoHint: { ...typography.small, color: colors.textMuted, lineHeight: 18 },
-  demoSwitch: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.border,
-    padding: 3,
-    justifyContent: 'center',
-  },
-  demoSwitchOn: { backgroundColor: colors.primary },
-  demoKnob: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.surface,
-  },
-  demoKnobOn: { alignSelf: 'flex-end' },
 });

@@ -4,9 +4,27 @@ import { MOCK_LESSON_APPLICATIONS, MOCK_LESSON_QUEUE } from '@/src/services/mock
 import { useNotificationStore } from './notificationStore';
 import { useAuthStore } from './authStore';
 import { persistAppState } from '@/src/services/appState';
+import { isSupabaseEnabled } from '@/src/lib/supabase';
 
 function persistLessonQueue() {
   persistAppState();
+}
+
+function remoteLesson(fn: (m: typeof import('@/src/services/supabase/social')) => Promise<unknown>) {
+  if (!isSupabaseEnabled()) return;
+  import('@/src/services/supabase/social')
+    .then(fn)
+    .catch((err) => console.warn('[lesson] sync failed', err));
+}
+
+/** 대기열 재정렬 후 원격 행들의 position·status 를 반영 (uuid 행만) */
+function syncQueueRemote(entries: LessonQueueEntry[]) {
+  if (!isSupabaseEnabled()) return;
+  entries.forEach((e) => {
+    // 로컬 임시 id(lq-...)는 아직 원격 insert 전 — 건너뜀
+    if (e.id.startsWith('lq-')) return;
+    remoteLesson((m) => m.updateLessonQueueRemote(e.id, { position: e.position, status: e.status }));
+  });
 }
 
 function normalizeQueue(entries: LessonQueueEntry[]): LessonQueueEntry[] {
@@ -134,6 +152,21 @@ export const useLessonStore = create<LessonState>((set, get) => ({
     set({ lessonQueue: nextQueue });
     persistLessonQueue();
 
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/social')
+        .then(({ insertLessonQueueRemote }) =>
+          insertLessonQueueRemote(entry).then((remoteId) => {
+            if (!remoteId) return;
+            set((state) => ({
+              lessonQueue: state.lessonQueue.map((e) =>
+                e.id === entry.id ? { ...e, id: remoteId } : e
+              ),
+            }));
+          })
+        )
+        .catch((err) => console.warn('[lesson] join failed', err));
+    }
+
     if (entry.status === 'next') {
       get().notifyIfNext(userId);
     }
@@ -171,6 +204,8 @@ export const useLessonStore = create<LessonState>((set, get) => ({
 
     set({ lessonQueue: nextQueue });
     persistLessonQueue();
+    remoteLesson((m) => m.deleteLessonQueueRemote(entry.id));
+    syncQueueRemote(nextQueue);
     return { success: true, message: '대기열에서 빠졌어요.' };
   },
 
@@ -203,6 +238,7 @@ export const useLessonStore = create<LessonState>((set, get) => ({
     const normalized = normalizeQueue(nextQueue);
     set({ lessonQueue: normalized });
     persistLessonQueue();
+    syncQueueRemote(normalized);
     get().notifyIfNext(target.userId);
   },
 
@@ -215,8 +251,10 @@ export const useLessonStore = create<LessonState>((set, get) => ({
       if (e.status === 'next' && e.id !== entryId) return { ...e, status: 'waiting' as const };
       return e;
     });
-    set({ lessonQueue: normalizeQueue(nextQueue) });
+    const normalized = normalizeQueue(nextQueue);
+    set({ lessonQueue: normalized });
     persistLessonQueue();
+    syncQueueRemote(normalized);
   },
 
   completeLesson: (entryId) => {
@@ -237,6 +275,7 @@ export const useLessonStore = create<LessonState>((set, get) => ({
     nextQueue = normalizeQueue(nextQueue);
     set({ lessonQueue: nextQueue });
     persistLessonQueue();
+    syncQueueRemote(nextQueue);
 
     if (firstWaiting) {
       get().notifyIfNext(firstWaiting.userId);
@@ -267,6 +306,8 @@ export const useLessonStore = create<LessonState>((set, get) => ({
     const nextQueue = normalizeQueue(remaining);
     set({ lessonQueue: nextQueue });
     persistLessonQueue();
+    remoteLesson((m) => m.deleteLessonQueueRemote(entryId));
+    syncQueueRemote(nextQueue);
 
     if (wasNext) {
       const promoted = nextQueue.find((e) => e.status === 'next');

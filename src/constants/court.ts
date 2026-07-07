@@ -16,9 +16,9 @@ export const GYM_VENUE = {
 
 /** 그리드 열 구성 (좌 → 우) */
 export const COURT_COLUMNS = [
-  { key: 'A', label: 'A열', sublabel: '무대측', ids: [1, 2, 3] },
+  { key: 'A', label: 'A열', sublabel: '', ids: [1, 2, 3] },
   { key: 'B', label: 'B열', sublabel: '센터', ids: [4, 5, 6], isCenter: true },
-  { key: 'C', label: 'C열', sublabel: '입구측', ids: [7, 8, 9] },
+  { key: 'C', label: 'C열', sublabel: '', ids: [7, 8, 9] },
 ] as const;
 
 export const GYM_FLOOR = {

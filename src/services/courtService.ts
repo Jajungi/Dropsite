@@ -48,6 +48,14 @@ export function getMostActiveCourt(courts: Court[]): Court | null {
   );
 }
 
+export function userHasActiveCourt(userId: string, courts: Court[]): boolean {
+  return courts.some(
+    (c) =>
+      c.status !== 'empty' &&
+      (c.reservedBy === userId || c.players.some((p) => p.userId === userId))
+  );
+}
+
 export function userToCourtPlayer(user: User): CourtPlayer {
   return {
     userId: user.id,

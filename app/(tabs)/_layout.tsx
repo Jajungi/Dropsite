@@ -9,18 +9,39 @@ import { useLayoutMode } from '@/src/hooks/useLayoutMode';
 import { useAuthGuard } from '@/src/hooks/useAuthGuard';
 import { useActivityClock } from '@/src/hooks/useActivityStatus';
 import { useAuthStore } from '@/src/stores/authStore';
+import { useAdminAlertCount } from '@/src/hooks/useAdminAlerts';
 import { NAV_ITEMS, ADMIN_NAV_ITEM } from '@/src/constants/nav';
+import { View, Text } from 'react-native';
 import { colors } from '@/src/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
+function TabIcon({ name, focused, size }: { name: IconName; focused: boolean; size: number }) {
   return (
     <Ionicons
       name={focused ? name : (`${name}-outline` as IconName)}
-      size={22}
+      size={size}
       color={focused ? colors.primary : colors.textMuted}
     />
+  );
+}
+
+function AdminTabIcon({ focused, size }: { focused: boolean; size: number }) {
+  const alerts = useAdminAlertCount();
+  const name = ADMIN_NAV_ITEM.icon;
+  return (
+    <View style={styles.adminIconWrap}>
+      <Ionicons
+        name={focused ? name : (`${name}-outline` as IconName)}
+        size={size}
+        color={focused ? colors.primary : colors.textMuted}
+      />
+      {alerts > 0 ? (
+        <View style={styles.adminBadge}>
+          <Text style={styles.adminBadgeText}>{alerts > 9 ? '9+' : alerts}</Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -33,13 +54,16 @@ const TAB_SCREENS = [
 ];
 
 export default function TabLayout() {
-  const { isDesktop } = useLayoutMode();
+  const { isDesktop, scale, isCompact } = useLayoutMode();
   const insets = useSafeAreaInsets();
   const isAdmin = useAuthStore((s) => s.currentUser?.membershipTier === 'admin');
+  const isGuest = useAuthStore((s) => s.isGuestSession);
   useAuthGuard();
   useActivityClock();
 
   const tabBarHeight = 49 + insets.bottom;
+  const tabIconSize = Math.round(22 * scale);
+  const tabLabelSize = isCompact ? 9 : Math.max(9, Math.round(10 * scale));
 
   const tabs = (
     <Tabs
@@ -54,7 +78,7 @@ export default function TabLayout() {
               paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 8 : 4),
               paddingTop: 6,
             },
-        tabBarLabelStyle: styles.tabLabel,
+        tabBarLabelStyle: [styles.tabLabel, { fontSize: tabLabelSize }],
         tabBarItemStyle: styles.tabItem,
         headerShown: false,
         animation: Platform.OS === 'ios' ? 'shift' : 'fade',
@@ -65,8 +89,9 @@ export default function TabLayout() {
           key={name}
           name={name}
           options={{
+            href: isGuest && name === 'friends' ? null : undefined,
             title: item.tabLabel,
-            tabBarIcon: ({ focused }) => <TabIcon name={item.icon} focused={focused} />,
+            tabBarIcon: ({ focused }) => <TabIcon name={item.icon} focused={focused} size={tabIconSize} />,
             tabBarAccessibilityLabel: item.label,
           }}
         />
@@ -76,9 +101,7 @@ export default function TabLayout() {
         options={{
           href: isAdmin ? undefined : null,
           title: ADMIN_NAV_ITEM.tabLabel,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name={ADMIN_NAV_ITEM.icon} focused={focused} />
-          ),
+          tabBarIcon: ({ focused }) => <AdminTabIcon focused={focused} size={tabIconSize} />,
           tabBarAccessibilityLabel: ADMIN_NAV_ITEM.label,
         }}
       />
@@ -116,5 +139,28 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     paddingTop: 2,
+  },
+  adminIconWrap: {
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminBadge: {
+    position: 'absolute',
+    top: -5,
+    right: 2,
+    minWidth: 15,
+    height: 15,
+    paddingHorizontal: 3,
+    borderRadius: 7.5,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminBadgeText: {
+    color: colors.textLight,
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 11,
   },
 });

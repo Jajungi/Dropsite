@@ -4,7 +4,6 @@ import Svg, { Defs, Pattern, Rect, Line } from 'react-native-svg';
 import { COURT_COLUMNS, GYM_FLOOR, GYM_VENUE } from '@/src/constants/court';
 import { colors, typography } from '@/src/theme';
 
-const ENTRANCE_GUTTER = 18;
 const ROW_GUTTER = 2;
 
 interface GymFloorMapProps {
@@ -12,8 +11,10 @@ interface GymFloorMapProps {
   courtGap: number;
   /** 전체 그리드 가로 폭 (패널 맞춤) */
   floorWidth?: number;
-  /** CourtCard wrapper chrome (paddingTop 14 + paddingBottom 3) */
+  /** CourtCard wrapper chrome (paddingTop + paddingBottom) */
   cardChrome?: number;
+  /** 좌측 입구 라벨 여백 */
+  entranceGutter?: number;
 }
 
 export function GymFloorMap({
@@ -21,7 +22,9 @@ export function GymFloorMap({
   courtGap,
   floorWidth,
   cardChrome = 17,
+  entranceGutter = 18,
 }: GymFloorMapProps) {
+  const ENTRANCE_GUTTER = entranceGutter;
   const colUnit = courtWidth + courtGap;
   const floorW =
     floorWidth ?? ENTRANCE_GUTTER + ROW_GUTTER + colUnit * 3 - courtGap;
@@ -31,7 +34,7 @@ export function GymFloorMap({
   const floorH = stageH + rowUnit * 3 + aisleH * 2 + 8;
 
   return (
-    <View style={[styles.wrap, { width: floorW, height: floorH }]} pointerEvents="none">
+    <View style={[styles.wrap, { width: floorW, height: floorH, pointerEvents: 'none' }]}>
       <Svg width={floorW} height={floorH} style={StyleSheet.absoluteFill}>
         <Defs>
           <Pattern id="gym-floor-stripe" patternUnits="userSpaceOnUse" width={8} height={8}>
@@ -40,10 +43,10 @@ export function GymFloorMap({
           </Pattern>
         </Defs>
 
-        <Rect x={0} y={0} width={floorW} height={floorH} rx={14} ry={14} fill="url(#gym-floor-stripe)" />
+        <Rect x={0} y={0} width={floorW} height={floorH} rx={4} ry={4} fill="url(#gym-floor-stripe)" />
 
         {/* 무대측 구역 */}
-        <Rect x={0} y={0} width={floorW} height={stageH} rx={14} fill={GYM_FLOOR.stage} opacity={0.55} />
+        <Rect x={0} y={0} width={floorW} height={stageH} rx={4} fill={GYM_FLOOR.stage} opacity={0.55} />
 
         {/* 입구측 구역 */}
         <Rect
@@ -108,7 +111,7 @@ export function GymFloorMap({
         {COURT_COLUMNS.map((col, i) => (
           <View key={col.key} style={[styles.colHeader, { width: courtWidth, marginRight: i < 2 ? courtGap : 0 }]}>
             <Text style={styles.colLabel}>{col.label}</Text>
-            <Text style={styles.colSub}>{col.sublabel}</Text>
+            {col.sublabel ? <Text style={styles.colSub}>{col.sublabel}</Text> : null}
           </View>
         ))}
       </View>
@@ -122,7 +125,7 @@ const styles = StyleSheet.create({
     top: 0,
     alignSelf: 'center',
     zIndex: 0,
-    borderRadius: 14,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   stageBand: {

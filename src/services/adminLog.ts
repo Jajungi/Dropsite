@@ -1,6 +1,7 @@
 import { useAuthStore } from '@/src/stores/authStore';
 import { useAdminLogStore } from '@/src/stores/adminLogStore';
 import { persistAppState } from '@/src/services/appState';
+import { isSupabaseEnabled } from '@/src/lib/supabase';
 import type { AdminLogCategory } from '@/src/types';
 
 export interface RecordAdminLogInput {
@@ -17,6 +18,15 @@ export interface RecordAdminLogInput {
 export function recordAdminLog(input: RecordAdminLogInput) {
   useAdminLogStore.getState().append(input);
   persistAppState();
+
+  if (isSupabaseEnabled()) {
+    const latest = useAdminLogStore.getState().logs[0];
+    if (latest) {
+      import('@/src/services/supabase/adminLogs')
+        .then(({ insertAdminLogRemote }) => insertAdminLogRemote(latest))
+        .catch((err) => console.warn('[adminLog] insert failed', err));
+    }
+  }
 }
 
 export function recordAdminLogAsCurrentUser(

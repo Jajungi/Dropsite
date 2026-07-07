@@ -41,6 +41,9 @@ export interface User {
   createdAt: string;
   /** 운영진 내부 메모 (회원에게 비공개) */
   adminNote?: string;
+  /** 동아리비 납부 인증 시각 */
+  clubFeeVerifiedAt?: string;
+  clubFeeVerifiedBy?: string;
   /** 정지 사유 · 시각 */
   suspendedReason?: string;
   suspendedAt?: string;
@@ -151,6 +154,7 @@ export interface CleaningSubmission {
   id: string;
   userId: string;
   userName: string;
+  kind?: 'cleaning' | 'net_setup';
   area: string;
   participantCount: number;
   photoUri?: string;
@@ -216,6 +220,9 @@ export type PointTransactionType =
   | 'court_reserve'
   | 'match_win'
   | 'cleaning'
+  | 'net_setup'
+  | 'club_fee'
+  | 'shuttlecock'
   | 'welcome'
   | 'bonus'
   | 'admin';
@@ -231,7 +238,11 @@ export interface PointTransaction {
   meta?: {
     courtId?: number;
     matchId?: string;
+    reversalOfId?: string;
   };
+  revokedAt?: string;
+  revokedBy?: string;
+  revokeReason?: string;
 }
 
 export interface SirenAlert {

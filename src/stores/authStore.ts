@@ -1,20 +1,37 @@
 import { create } from 'zustand';
 import type { GeoLocation, User, AttendanceRecord, MembershipTier, MemberStatus, LessonAccessStatus } from '@/src/types';
 import { MOCK_USERS, MOCK_ATTENDANCE } from '@/src/services/mockData';
-import { AVATAR_COLORS } from '@/src/constants';
+import { AVATAR_COLORS, GYM_LOCATION } from '@/src/constants';
 import { isWithinGymFence } from '@/src/services/geoFence';
 import { hashPassword, verifyPassword, seedDemoCredentials } from '@/src/services/authCredentials';
-import { applyPointMultiplier, getRankFromElo } from '@/src/services/points';
-import { applyPointChange } from '@/src/services/pointLedger';
+import { getAttendancePoints, getRankFromElo } from '@/src/services/points';
+import { POINT_EARN, POINT_SPEND } from '@/src/constants/points';
+import { applyPointChange, applyPointChangeLocalOnly } from '@/src/services/pointLedger';
 import { usePointStore } from './pointStore';
 import { useNotificationStore } from './notificationStore';
 import { persistAppState } from '@/src/services/appState';
 import { recordAdminLog, recordAdminLogAsCurrentUser, recordAdminLogAsActor } from '@/src/services/adminLog';
-
-const WELCOME_POINTS = 500;
+import { isSupabaseEnabled } from '@/src/lib/supabase';
+import { supabaseLogin, supabaseLogout, supabaseRegister, supabaseGuestLogin } from '@/src/services/supabase/auth';
+import { fetchAllProfiles, uploadAvatar, removeAvatar } from '@/src/services/supabase/profiles';
+import { INFINITE_DEV_POINTS } from '@/src/utils/responsive';
+import {
+  createLocalGuestUser,
+  isGuestUser,
+  validateGuestName,
+} from '@/src/utils/guestAccess';
+import { saveGuestSession, clearGuestSession } from '@/src/services/guestSession';
 
 function pickAvatarColor(index: number): string {
   return AVATAR_COLORS[index % AVATAR_COLORS.length];
+}
+
+/** 관리자 회원 관리 변경분을 Supabase 프로필에 반영 (fire-and-forget) */
+function syncAdminProfileRemote(user: User | undefined) {
+  if (!user || !isSupabaseEnabled()) return;
+  import('@/src/services/supabase/profiles')
+    .then(({ adminUpdateProfileRemote }) => adminUpdateProfileRemote(user))
+    .catch((err) => console.warn('[profile] admin sync failed', err));
 }
 
 function todayKey() {
@@ -25,18 +42,21 @@ interface AuthState {
   currentUser: User | null;
   users: User[];
   isAuthenticated: boolean;
+  /** 게스트(임시) 세션 — 포인트·친구·랭크 등 제한 */
+  isGuestSession: boolean;
   authHydrated: boolean;
   peakResetDate: string | null;
   lastCleaningBonusMonth: string | null;
   credentials: Record<string, string>;
-  login: (studentId: string, password: string) => { success: boolean; message: string };
-  logout: () => void;
+  login: (studentId: string, password: string) => Promise<{ success: boolean; message: string }>;
+  loginAsGuest: (name: string) => Promise<{ success: boolean; message: string }>;
+  logout: () => Promise<void>;
   register: (input: {
     studentId: string;
     name: string;
     email: string;
     password: string;
-  }) => { success: boolean; message: string };
+  }) => Promise<{ success: boolean; message: string }>;
   hydrateAuth: (
     users: User[],
     attendanceRecords: AttendanceRecord[],
@@ -82,7 +102,7 @@ interface AuthState {
   updateUserProfile: (
     userId: string,
     patch: { avatarUri?: string | null }
-  ) => { success: boolean; message: string };
+  ) => Promise<{ success: boolean; message: string }>;
   setUserAtGym: (userId: string, atGym: boolean) => void;
   canPerformMemberAction: (userId: string) => { allowed: boolean; reason?: string };
   setLastCleaningBonusMonth: (month: string) => void;
@@ -105,6 +125,16 @@ interface AuthState {
     delta: number,
     reason: string
   ) => { success: boolean; message: string };
+  adminVerifyClubFee: (
+    userId: string,
+    adminId: string
+  ) => { success: boolean; message: string };
+  adminRevokeClubFee: (
+    userId: string,
+    adminId: string,
+    reason?: string
+  ) => { success: boolean; message: string };
+  claimShuttlecock: (userId: string) => { success: boolean; message: string };
   adminAdjustElo: (userId: string, delta: number, reason: string) => { success: boolean; message: string };
   adminSetAdminNote: (userId: string, note: string) => { success: boolean; message: string };
   adminSendSystemNotice: (
@@ -135,6 +165,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   currentUser: null,
   users: MOCK_USERS,
   isAuthenticated: false,
+  isGuestSession: false,
   authHydrated: false,
   peakResetDate: null,
   lastCleaningBonusMonth: null,
@@ -152,6 +183,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       attendanceRecords,
       currentUser,
       isAuthenticated: !!currentUser,
+      isGuestSession: isGuestUser(currentUser),
       peakResetDate,
       credentials: seedDemoCredentials(
         normalized.map((u) => u.studentId),
@@ -163,7 +195,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     get().resetPeakReservationsIfNewDay();
   },
 
-  login: (studentId, password) => {
+  login: async (studentId, password) => {
+    if (isSupabaseEnabled()) {
+      const result = await supabaseLogin(studentId, password);
+      if (!result.success) return result;
+      const users = await fetchAllProfiles();
+      const user = users.find((u) => u.id === result.userId) ?? null;
+      await clearGuestSession();
+      set({ users, currentUser: user, isAuthenticated: Boolean(user), isGuestSession: false, credentials: {} });
+      return { success: true, message: result.message };
+    }
+
     const trimmed = studentId.trim();
     const user = get().users.find((u) => u.studentId === trimmed);
     if (!user) {
@@ -187,17 +229,62 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           : '계정이 정지되었어요. 운영진에게 문의해 주세요.',
       };
     }
-    set({ currentUser: user, isAuthenticated: true });
+    set({ currentUser: user, isAuthenticated: true, isGuestSession: false });
     persistAppState();
     return { success: true, message: `${user.name}님, 환영합니다!` };
   },
 
-  logout: () => {
-    set({ currentUser: null, isAuthenticated: false });
+  loginAsGuest: async (name) => {
+    const validation = validateGuestName(name);
+    if (!validation.ok) {
+      return { success: false, message: validation.message ?? '이름을 확인해 주세요.' };
+    }
+    const trimmed = name.trim();
+
+    if (isSupabaseEnabled()) {
+      const result = await supabaseGuestLogin(trimmed);
+      if (!result.success) return result;
+      const users = await fetchAllProfiles();
+      const user = users.find((u) => u.id === result.userId) ?? null;
+      if (!user) {
+        return { success: false, message: '게스트 프로필을 불러오지 못했어요.' };
+      }
+      await saveGuestSession({ userId: user.id, name: user.name });
+      set({
+        users,
+        currentUser: user,
+        isAuthenticated: true,
+        isGuestSession: true,
+        credentials: {},
+      });
+      return { success: true, message: result.message };
+    }
+
+    const guest = createLocalGuestUser(trimmed, get().users.length);
+    const users = [...get().users.filter((u) => !u.id.startsWith('guest-')), guest];
+    await saveGuestSession({ userId: guest.id, name: guest.name });
+    set({
+      users,
+      currentUser: guest,
+      isAuthenticated: true,
+      isGuestSession: true,
+    });
     persistAppState();
+    return { success: true, message: `${guest.name}님, 게스트로 입장했어요.` };
   },
 
-  register: ({ studentId, name, email, password }) => {
+  logout: async () => {
+    if (isSupabaseEnabled()) await supabaseLogout();
+    await clearGuestSession();
+    set({ currentUser: null, isAuthenticated: false, isGuestSession: false });
+    if (!isSupabaseEnabled()) persistAppState();
+  },
+
+  register: async ({ studentId, name, email, password }) => {
+    if (isSupabaseEnabled()) {
+      return supabaseRegister({ studentId, name, email, password });
+    }
+
     const trimmedId = studentId.trim();
     const trimmedName = name.trim();
     if (!trimmedId || !trimmedName) {
@@ -255,12 +342,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         u.id === userId ? { ...u, memberStatus: 'approved' as const } : u
       ),
     }));
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
 
-    applyPointChange(userId, WELCOME_POINTS, 'welcome', '신입 부원 웰컴 리워드');
     recordAdminLogAsCurrentUser({
       category: 'member',
       action: 'member.approve',
-      message: `${user.name} 회원 가입 승인 (+${WELCOME_POINTS}P 웰컴)`,
+      message: `${user.name} 회원 가입 승인 (회비 인증 후 +${POINT_EARN.CLUB_FEE}P)`,
       targetId: userId,
       targetName: user.name,
     });
@@ -274,6 +361,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         u.id === userId ? { ...u, memberStatus: 'rejected' as const } : u
       ),
     }));
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
     if (user) {
       recordAdminLogAsCurrentUser({
         category: 'member',
@@ -383,6 +471,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   attendanceRecords: MOCK_ATTENDANCE,
 
   checkIn: (userId) => {
+    if (!useAppStore.getState().checkGeoFence()) {
+      return {
+        success: false,
+        message: `${GYM_LOCATION.name} 반경 ${GYM_LOCATION.radiusMeters}m 안에서만 출석할 수 있어요.`,
+      };
+    }
     const today = todayKey();
     const existing = get().attendanceRecords.find(
       (r) => r.userId === userId && r.date === today
@@ -402,18 +496,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const user = get().users.find((u) => u.id === userId);
     if (user) {
-      const pts = applyPointMultiplier(100, user.membershipTier);
-      usePointStore.getState().recordTransaction({
-        userId,
-        amount: pts,
-        type: 'check_in',
-        description: '체육관 출석 인증',
-      });
-      get().updateUserPoints(userId, pts);
+      const pts = getAttendancePoints(user.membershipTier);
+      // 로컬 낙관적 반영 (서버 포인트는 rpc_check_in / 관리자 대리 경로가 처리)
+      applyPointChangeLocalOnly(userId, pts, 'check_in', '체육관 출석 인증 (500m 내)');
       get().setUserAtGym(userId, true);
+
+      if (isSupabaseEnabled()) {
+        const isSelf = get().currentUser?.id === userId;
+        if (isSelf) {
+          // 서버가 지오펜스·중복·포인트를 검증 (rpc_check_in)
+          const loc = useAppStore.getState().location;
+          import('@/src/services/supabase/points')
+            .then(({ checkInRemote }) => checkInRemote(loc?.latitude ?? null, loc?.longitude ?? null))
+            .catch((err) => console.warn('[attendance] check-in failed', err));
+        } else {
+          // 관리자 대리 출석: 출석 insert + 포인트 적립(관리자 권한)
+          import('@/src/services/supabase/attendance')
+            .then(({ insertAttendanceRemote }) => insertAttendanceRemote(userId, today))
+            .catch((err) => console.warn('[attendance] admin insert failed', err));
+          import('@/src/services/supabase/points')
+            .then(({ adjustPointsRemote }) =>
+              adjustPointsRemote(userId, pts, 'check_in', '관리자 대리 출석')
+            )
+            .catch((err) => console.warn('[attendance] admin award failed', err));
+        }
+      }
     }
 
-    const ptsAwarded = user ? applyPointMultiplier(100, user.membershipTier) : 100;
+    const ptsAwarded = user ? getAttendancePoints(user.membershipTier) : POINT_EARN.ATTENDANCE_ASSOCIATE;
     if (user) {
       recordAdminLog({
         category: 'attendance',
@@ -441,7 +551,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }));
 
     if (user && record.date === todayKey()) {
-      const pts = applyPointMultiplier(100, user.membershipTier);
+      const pts = getAttendancePoints(user.membershipTier);
       applyPointChange(user.id, -pts, 'admin', `출석 취소 · ${reason}`);
       get().setUserAtGym(user.id, false);
     }
@@ -540,6 +650,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
       return { users, currentUser };
     });
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/profiles')
+        .then(({ syncProfilePatch }) =>
+          syncProfilePatch(userId, {
+            scheduleDate: today,
+            scheduledStart: start,
+            scheduledEnd,
+          })
+        )
+        .catch((err) => console.warn('[profile] schedule sync failed', err));
+    }
     persistAppState();
     return { success: true, message: `오늘 ${start} 도착으로 저장했어요.` };
   },
@@ -643,7 +764,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return { success: true, message: '레슨 권한 신청을 거절했어요.' };
   },
 
-  updateUserProfile: (userId, patch) => {
+  updateUserProfile: async (userId, patch) => {
+    if (isSupabaseEnabled() && 'avatarUri' in patch) {
+      try {
+        if (patch.avatarUri && !patch.avatarUri.startsWith('http')) {
+          await uploadAvatar(userId, patch.avatarUri);
+        } else if (patch.avatarUri === null) {
+          await removeAvatar(userId);
+        }
+        const users = await fetchAllProfiles();
+        const currentUser = syncCurrentUser(users, get().currentUser?.id ?? null);
+        set({ users, currentUser });
+        return {
+          success: true,
+          message: patch.avatarUri ? '프로필 사진이 저장되었어요.' : '프로필 사진을 삭제했어요.',
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : '프로필 사진 저장에 실패했어요.';
+        return { success: false, message: msg };
+      }
+    }
+
     set((state) => {
       const users = state.users.map((u) => {
         if (u.id !== userId) return u;
@@ -670,6 +811,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         u.id === userId ? { ...u, isAtGym: atGym } : u
       );
       const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
+
+      if (isSupabaseEnabled()) {
+        import('@/src/services/supabase/profiles')
+          .then(({ syncProfilePatch }) => syncProfilePatch(userId, { isAtGym: atGym }))
+          .catch((err) => console.warn('[profile] atGym sync failed', err));
+      }
       return { users, currentUser };
     }),
 
@@ -677,7 +824,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = get().users.find((u) => u.id === userId);
     if (!user) return { allowed: false, reason: '사용자를 찾을 수 없어요.' };
     if (user.membershipTier === 'guest') {
-      return { allowed: false, reason: '비회원은 이 기능을 사용할 수 없어요. 회원가입 후 이용해 주세요.' };
+      return { allowed: false, reason: '게스트는 이 기능을 사용할 수 없어요. 회원가입 후 이용해 주세요.' };
     }
     if (user.memberStatus !== 'approved') {
       if (user.memberStatus === 'suspended') {
@@ -705,6 +852,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
       return { users, currentUser };
     });
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
 
     const tierLabel =
       tier === 'admin' ? '관리자' : tier === 'full' ? '정회원' : tier === 'associate' ? '준회원' : '비회원';
@@ -754,6 +902,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       return { users, currentUser, isAuthenticated };
     });
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
 
     const statusLabel =
       status === 'approved'
@@ -792,6 +941,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
       return { users, currentUser };
     });
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
 
     const label =
       status === 'approved'
@@ -837,6 +987,136 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     };
   },
 
+  adminVerifyClubFee: (userId, adminId) => {
+    const user = get().users.find((u) => u.id === userId);
+    if (!user) return { success: false, message: '회원을 찾을 수 없어요.' };
+    if (user.memberStatus !== 'approved') {
+      return { success: false, message: '승인된 회원만 회비 인증할 수 있어요.' };
+    }
+    if (user.clubFeeVerifiedAt) {
+      return { success: false, message: '이미 회비 납부가 인증되었어요.' };
+    }
+
+    const verifiedAt = new Date().toISOString();
+    set((state) => ({
+      users: state.users.map((u) =>
+        u.id === userId
+          ? { ...u, clubFeeVerifiedAt: verifiedAt, clubFeeVerifiedBy: adminId }
+          : u
+      ),
+      currentUser:
+        state.currentUser?.id === userId
+          ? {
+              ...state.currentUser,
+              clubFeeVerifiedAt: verifiedAt,
+              clubFeeVerifiedBy: adminId,
+            }
+          : state.currentUser,
+    }));
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
+
+    applyPointChange(
+      userId,
+      POINT_EARN.CLUB_FEE,
+      'club_fee',
+      '동아리비 납부 인증 (웰컴 리워드)'
+    );
+    recordAdminLogAsActor(adminId, {
+      category: 'point',
+      action: 'point.club_fee',
+      message: `${user.name} 회비 납부 인증 (+${POINT_EARN.CLUB_FEE}P)`,
+      targetId: userId,
+      targetName: user.name,
+    });
+    persistAppState();
+    return {
+      success: true,
+      message: `${user.name}님 회비 인증 완료 (+${POINT_EARN.CLUB_FEE}P)`,
+    };
+  },
+
+  adminRevokeClubFee: (userId, adminId, reason = '운영진 취소') => {
+    const user = get().users.find((u) => u.id === userId);
+    if (!user) return { success: false, message: '회원을 찾을 수 없어요.' };
+    if (!user.clubFeeVerifiedAt) {
+      return { success: false, message: '회비 인증 기록이 없어요.' };
+    }
+
+    const clubFeeTx = usePointStore
+      .getState()
+      .transactions.find(
+        (t) =>
+          t.userId === userId &&
+          t.type === 'club_fee' &&
+          t.amount > 0 &&
+          !t.revokedAt
+      );
+    if (clubFeeTx) {
+      usePointStore.getState().adminRevokeTransaction(clubFeeTx.id, adminId, reason);
+    } else {
+      applyPointChange(userId, -POINT_EARN.CLUB_FEE, 'admin', `회비 인증 취소 · ${reason}`);
+    }
+
+    set((state) => ({
+      users: state.users.map((u) => {
+        if (u.id !== userId) return u;
+        const next = { ...u };
+        delete next.clubFeeVerifiedAt;
+        delete next.clubFeeVerifiedBy;
+        return next;
+      }),
+      currentUser:
+        state.currentUser?.id === userId
+          ? (() => {
+              const next = { ...state.currentUser! };
+              delete next.clubFeeVerifiedAt;
+              delete next.clubFeeVerifiedBy;
+              return next;
+            })()
+          : state.currentUser,
+    }));
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
+
+    recordAdminLogAsActor(adminId, {
+      category: 'point',
+      action: 'point.club_fee.revoke',
+      message: `${user.name} 회비 인증 취소`,
+      targetId: userId,
+      targetName: user.name,
+    });
+    persistAppState();
+    return { success: true, message: `${user.name}님 회비 인증을 취소했어요.` };
+  },
+
+  claimShuttlecock: (userId) => {
+    const user = get().users.find((u) => u.id === userId);
+    if (!user) return { success: false, message: '사용자를 찾을 수 없어요.' };
+
+    const memberCheck = get().canPerformMemberAction(userId);
+    if (!memberCheck.allowed) {
+      return { success: false, message: memberCheck.reason ?? '수령할 수 없어요.' };
+    }
+
+    if (user.points < POINT_SPEND.SHUTTLECOCK) {
+      return {
+        success: false,
+        message: `포인트가 부족해요. (필요: ${POINT_SPEND.SHUTTLECOCK}P)`,
+      };
+    }
+
+    applyPointChange(
+      userId,
+      -POINT_SPEND.SHUTTLECOCK,
+      'shuttlecock',
+      '새 경기용 셔틀콕 수령'
+    );
+    persistAppState();
+    return {
+      success: true,
+      message: `셔틀콕 수령 완료 (-${POINT_SPEND.SHUTTLECOCK}P)`,
+    };
+  },
+
   adminAdjustElo: (userId, delta, reason) => {
     const user = get().users.find((u) => u.id === userId);
     if (!user) return { success: false, message: '회원을 찾을 수 없어요.' };
@@ -878,6 +1158,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return { users };
     });
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
     recordAdminLogAsCurrentUser({
       category: 'member',
       action: 'member.note',
@@ -921,10 +1202,14 @@ interface AppState {
   location: GeoLocation | null;
   locationError: string | null;
   demoMode: boolean;
+  /** 개발자 모드: ON 시 대량 포인트 부여, OFF 시 원래 포인트로 복귀 */
+  infinitePoints: boolean;
+  infinitePointsSnapshot: number | null;
   setActivityTime: (value: boolean) => void;
   setLocation: (location: GeoLocation | null) => void;
   setLocationError: (error: string | null) => void;
   setDemoMode: (value: boolean) => void;
+  setInfinitePoints: (value: boolean) => void;
   checkGeoFence: () => boolean;
 }
 
@@ -932,10 +1217,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   isActivityTime: true,
   activityRemaining: null,
   nextActivityTime: null,
-  isAtGym: true,
+  isAtGym: false,
   location: null,
   locationError: null,
   demoMode: false,
+  infinitePoints: false,
+  infinitePointsSnapshot: null,
 
   setActivityTime: (value) => {
     if (get().isActivityTime === value) return;
@@ -952,6 +1239,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setLocationError: (error) => set({ locationError: error }),
   setDemoMode: (value) => set({ demoMode: value, isAtGym: value ? true : get().isAtGym }),
+  setInfinitePoints: (value) => {
+    if (get().infinitePoints === value) return;
+
+    const auth = useAuthStore.getState();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    if (value) {
+      const snapshot = user.points;
+      set({ infinitePoints: true, infinitePointsSnapshot: snapshot });
+      const delta = INFINITE_DEV_POINTS - snapshot;
+      if (delta !== 0) {
+        auth.adminAdjustPoints(user.id, delta, '개발자 무한 포인트 모드 ON');
+      }
+      return;
+    }
+
+    const snapshot = get().infinitePointsSnapshot;
+    if (snapshot != null) {
+      const current =
+        useAuthStore.getState().users.find((u) => u.id === user.id)?.points ?? user.points;
+      const delta = snapshot - current;
+      if (delta !== 0) {
+        auth.adminAdjustPoints(user.id, delta, '개발자 무한 포인트 모드 OFF (복귀)');
+      }
+    }
+    set({ infinitePoints: false, infinitePointsSnapshot: null });
+  },
   checkGeoFence: () => {
     const { demoMode, location } = get();
     if (demoMode) return true;

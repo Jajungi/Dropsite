@@ -10,11 +10,13 @@
     "@expo-google-fonts/titan-one": "^0.4.1",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.110.0",
     "expo": "~57.0.2",
     "expo-blur": "~57.0.0",
     "expo-constants": "~57.0.3",
     "expo-font": "~57.0.0",
     "expo-haptics": "~57.0.0",
+    "expo-image-manipulator": "~57.0.2",
     "expo-image-picker": "~57.0.2",
     "expo-linear-gradient": "~57.0.0",
     "expo-linking": "~57.0.1",
@@ -39,14 +41,17 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "ws": "^8.18.0"
   },
   "scripts": {
     "start": "expo start",
+    "server": "node server/sync-server.mjs",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "setup:check": "node scripts/check-supabase-env.mjs"
   },
   "private": true
 }

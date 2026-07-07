@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useAuthStore } from '@/src/stores/authStore';
 import { useNotificationStore } from '@/src/stores/notificationStore';
 import { Button } from '@/src/components/ui/Button';
-import { formatTodayLabel, getTodayKey, isScheduleForToday } from '@/src/utils/dateFormat';
-import { colors, spacing, typography, borderRadius } from '@/src/theme';
+import { TimeRangeSlider } from '@/src/components/ui/TimeRangeSlider';
+import { ACTIVITY_SCHEDULE } from '@/src/constants';
+import { formatCompactDayLabel, getTodayKey, isScheduleForToday } from '@/src/utils/dateFormat';
+import { colors, spacing, typography } from '@/src/theme';
 
 export function ArrivalScheduleCard() {
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -12,7 +14,13 @@ export function ArrivalScheduleCard() {
   const showToast = useNotificationStore((s) => s.showToast);
 
   const todayKey = useMemo(() => getTodayKey(), []);
-  const todayLabel = useMemo(() => formatTodayLabel(), []);
+  const todayLabel = useMemo(() => formatCompactDayLabel(), []);
+
+  const activityBounds = useMemo(() => {
+    const day = new Date().getDay();
+    const session = ACTIVITY_SCHEDULE.find((s) => s.day === day);
+    return session ?? ACTIVITY_SCHEDULE[0];
+  }, []);
 
   const savedForToday =
     currentUser &&
@@ -33,7 +41,20 @@ export function ArrivalScheduleCard() {
 
   if (!currentUser) return null;
 
+  const handleTimeChange = (start: string, end: string) => {
+    setArrivalTime(start);
+    setEndTime(end);
+  };
+
   const handleSave = () => {
+    if (!arrivalTime) {
+      showToast({
+        type: 'warning',
+        title: '',
+        message: '시간을 선택해 주세요.',
+      });
+      return;
+    }
     const result = updateUserSchedule(currentUser.id, arrivalTime, endTime || undefined);
     showToast({
       type: result.success ? 'success' : 'warning',
@@ -44,29 +65,15 @@ export function ArrivalScheduleCard() {
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.dateRow}>
-        <Text style={styles.dateLabel}>오늘</Text>
-        <Text style={styles.dateValue}>{todayLabel}</Text>
-      </View>
-
-      <Text style={styles.fieldLabel}>도착 예정 시각</Text>
-      <TextInput
-        style={styles.input}
-        value={arrivalTime}
-        onChangeText={setArrivalTime}
-        placeholder="예: 18:30"
-        keyboardType="numbers-and-punctuation"
-        maxLength={5}
-      />
-
-      <Text style={styles.fieldLabel}>퇴장 예정 (선택)</Text>
-      <TextInput
-        style={styles.input}
-        value={endTime}
-        onChangeText={setEndTime}
-        placeholder="예: 21:00"
-        keyboardType="numbers-and-punctuation"
-        maxLength={5}
+      <TimeRangeSlider
+        startHour={activityBounds.startHour}
+        startMinute={activityBounds.startMinute}
+        endHour={activityBounds.endHour}
+        endMinute={activityBounds.endMinute}
+        selectedStart={arrivalTime || undefined}
+        selectedEnd={endTime || undefined}
+        onChange={handleTimeChange}
+        dateLabel={todayLabel}
       />
 
       <Text style={styles.hint}>친구 · 일정 탭에 오늘 도착 시간으로 표시됩니다.</Text>
@@ -77,49 +84,13 @@ export function ArrivalScheduleCard() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.xs },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: colors.primaryLight,
-    borderRadius: borderRadius.md,
-  },
-  dateLabel: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  dateValue: {
-    ...typography.bodyBold,
-    color: colors.text,
-    fontSize: 16,
-  },
-  fieldLabel: {
-    ...typography.small,
-    color: colors.textSecondary,
-    fontWeight: '600',
-    marginTop: spacing.sm,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    ...typography.body,
-    color: colors.text,
-    textAlign: 'center',
-    fontSize: 20,
-    fontWeight: '700',
-  },
+  wrap: { gap: spacing.sm },
   hint: {
     ...typography.caption,
     color: colors.textMuted,
     marginTop: spacing.xs,
     lineHeight: 18,
+    textAlign: 'center',
   },
   saveBtn: { marginTop: spacing.sm },
 });

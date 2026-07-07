@@ -12,6 +12,8 @@ import type {
   AdminLogEntry,
   CoachAnnouncement,
 } from '@/src/types';
+import { notifyCrossTabSync } from '@/src/services/crossTabSync';
+import { notifyServerSync } from '@/src/services/serverSync';
 
 const APP_STATE_KEY = '@badmin/app-state';
 
@@ -58,7 +60,12 @@ export async function saveAppState(snapshot: AppStateSnapshot): Promise<void> {
 export function scheduleSaveAppState(getSnapshot: () => AppStateSnapshot) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    saveAppState(getSnapshot()).catch(() => {});
+    saveAppState(getSnapshot())
+      .then(() => {
+        notifyCrossTabSync();
+        notifyServerSync();
+      })
+      .catch(() => {});
   }, 400);
 }
 

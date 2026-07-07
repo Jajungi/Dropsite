@@ -55,6 +55,12 @@ function typeIcon(type: PointTransaction['type']) {
       return '🏆';
     case 'cleaning':
       return '🧹';
+    case 'net_setup':
+      return '🥅';
+    case 'club_fee':
+      return '💳';
+    case 'shuttlecock':
+      return '🏸';
     case 'welcome':
       return '🎉';
     case 'bonus':

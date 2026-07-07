@@ -21,22 +21,11 @@ import 'react-native-reanimated';
 import { ToastContainer } from '@/src/components/ui/ToastContainer';
 import { SirenModal } from '@/src/components/ui/SirenModal';
 import { colors, fonts, typography } from '@/src/theme';
-import { loadCourts, loadRooms } from '@/src/services/persistence';
-import { loadAppState } from '@/src/services/appPersistence';
-import { seedDemoFriendships } from '@/src/services/friendBootstrap';
-import { seedDemoCredentials } from '@/src/services/authCredentials';
-import { processMonthlyCleaningBonus } from '@/src/services/cleaningBonus';
-import { useCourtStore } from '@/src/stores/courtStore';
-import { useLobbyStore } from '@/src/stores/lobbyStore';
-import { useAuthStore } from '@/src/stores/authStore';
-import { useFriendStore } from '@/src/stores/friendStore';
-import { usePointStore } from '@/src/stores/pointStore';
-import { useNotificationStore } from '@/src/stores/notificationStore';
-import { useLessonStore } from '@/src/stores/lessonStore';
-import { useAdminLogStore } from '@/src/stores/adminLogStore';
-import { useCoachingStore } from '@/src/stores/coachingStore';
-import { MOCK_COACH_ANNOUNCEMENTS } from '@/src/services/mockData';
-import { seedDemoAdminLogs } from '@/src/services/demoAdminLogs';
+import { hydrateAppStateFromDisk } from '@/src/services/hydrateApp';
+import { initCrossTabSync } from '@/src/services/crossTabSync';
+import { initServerSync } from '@/src/services/serverSync';
+import { initSupabaseApp } from '@/src/services/supabase/init';
+import { isSupabaseEnabled } from '@/src/lib/supabase';
 import { initLocalNotifications } from '@/src/services/localNotifications';
 
 export { ErrorBoundary } from 'expo-router';
@@ -72,60 +61,14 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const [savedCourts, savedRooms, appState] = await Promise.all([
-        loadCourts(),
-        loadRooms(),
-        loadAppState(),
-      ]);
-      if (savedCourts?.length) useCourtStore.getState().hydrateCourts(savedCourts);
-      if (savedRooms?.length) useLobbyStore.getState().hydrateRooms(savedRooms);
-
-      if (appState) {
-        useAuthStore.getState().hydrateAuth(
-          appState.users,
-          appState.attendanceRecords,
-          appState.sessionUserId,
-          appState.peakResetDate,
-          appState.credentials ?? {},
-          appState.lastCleaningBonusMonth ?? null
-        );
-        useFriendStore.getState().hydrate(appState.friendships, appState.friendRequests);
-        usePointStore.getState().hydrate(appState.pointTransactions);
-        useNotificationStore.getState().hydrate({
-          pendingMatches: appState.pendingMatches,
-          matchHistory: appState.matchHistory,
-          cleaningLeaderboard: appState.cleaningLeaderboard,
-          inbox: appState.inbox,
-        });
-        useLessonStore.getState().hydrate(appState.lessonApplications, appState.lessonQueue);
-        useAdminLogStore.getState().hydrate(
-          appState.adminLogs?.length ? appState.adminLogs : seedDemoAdminLogs()
-        );
-        useCoachingStore.getState().hydrate(
-          appState.coachAnnouncements?.length
-            ? appState.coachAnnouncements
-            : MOCK_COACH_ANNOUNCEMENTS
-        );
-
-        const bonusMonth = processMonthlyCleaningBonus(appState.lastCleaningBonusMonth ?? null);
-        if (bonusMonth && bonusMonth !== appState.lastCleaningBonusMonth) {
-          useAuthStore.getState().setLastCleaningBonusMonth(bonusMonth);
-        }
-      } else {
-        const users = useAuthStore.getState().users;
-        useAuthStore.getState().hydrateAuth(
-          users,
-          useAuthStore.getState().attendanceRecords,
-          null,
-          null,
-          seedDemoCredentials(users.map((u) => u.studentId)),
-          null
-        );
-        useFriendStore.getState().hydrate(seedDemoFriendships(users), []);
-        useAdminLogStore.getState().hydrate(seedDemoAdminLogs());
-        useCoachingStore.getState().hydrate(MOCK_COACH_ANNOUNCEMENTS);
+    initCrossTabSync();
+    void (async () => {
+      if (isSupabaseEnabled()) {
+        await initSupabaseApp();
+        return;
       }
+      await hydrateAppStateFromDisk();
+      await initServerSync();
     })();
   }, []);
 

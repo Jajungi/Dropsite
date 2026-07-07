@@ -18,8 +18,8 @@ interface CourtGridProps {
   registerCourtRef?: (id: number, ref: View | null) => void;
 }
 
-function getCourtById(courts: Court[], id: number): Court {
-  return courts.find((c) => c.id === id)!;
+function getCourtById(courts: Court[], id: number): Court | undefined {
+  return courts.find((c) => c.id === id);
 }
 
 function matchesFilter(court: Court, filter: 'all' | 'empty' | 'mine', myUserId?: string) {
@@ -38,7 +38,17 @@ export function CourtGrid({
   myUserId,
   registerCourtRef,
 }: CourtGridProps) {
-  const { courtWidth, courtGap, gridPadding, gridContentHeight, contentWidth } = useLayoutMode();
+  const {
+    courtWidth,
+    courtGap,
+    gridPadding,
+    gridContentHeight,
+    contentWidth,
+    entranceGutter,
+    cardHPad,
+    cardChromeTop,
+    cardChrome,
+  } = useLayoutMode();
   const floorTopInset = 30;
 
   return (
@@ -50,7 +60,13 @@ export function CourtGrid({
             { paddingHorizontal: gridPadding, minHeight: gridContentHeight, width: contentWidth },
           ]}
         >
-          <GymFloorMap courtWidth={courtWidth} courtGap={courtGap} floorWidth={contentWidth} />
+          <GymFloorMap
+            courtWidth={courtWidth}
+            courtGap={courtGap}
+            floorWidth={contentWidth}
+            entranceGutter={entranceGutter}
+            cardChrome={cardChrome}
+          />
           <View style={{ paddingTop: floorTopInset }}>
             {GYM_COURT_ROWS.map((row, rowIdx) => (
               <View
@@ -58,17 +74,18 @@ export function CourtGrid({
                 style={[styles.rowWrap, { marginBottom: rowIdx < 2 ? courtGap : 0 }]}
               >
                 {rowIdx === 2 ? (
-                  <View style={styles.entranceCol}>
+                  <View style={[styles.entranceCol, { width: entranceGutter }]}>
                     <Text style={styles.entranceLabel}>{GYM_VENUE.entranceLabel}</Text>
                     <Text style={styles.entranceArrow}>▼</Text>
                   </View>
                 ) : (
-                  <View style={styles.entranceSpacer} />
+                  <View style={[styles.entranceSpacer, { width: entranceGutter }]} />
                 )}
 
                 <View style={[styles.row, { gap: courtGap }]}>
                   {row.map((courtId) => {
                     const court = getCourtById(courts, courtId);
+                    if (!court) return null;
                     const dimmed = filter !== 'all' && !matchesFilter(court, filter, myUserId);
                     return (
                       <View
@@ -83,6 +100,8 @@ export function CourtGrid({
                           isSelected={selectedCourtId === courtId}
                           isDimmed={dimmed}
                           courtWidth={courtWidth}
+                          hPad={cardHPad}
+                          chromeTop={cardChromeTop}
                           compact
                         />
                       </View>
@@ -115,7 +134,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   entranceCol: {
-    width: 18,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
@@ -134,7 +152,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     opacity: 0.65,
   },
-  entranceSpacer: { width: 18, flexShrink: 0 },
+  entranceSpacer: { flexShrink: 0 },
   row: {
     flex: 1,
     flexDirection: 'row',

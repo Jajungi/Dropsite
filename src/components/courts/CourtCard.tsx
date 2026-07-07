@@ -8,7 +8,10 @@ import { GameModeBadge } from './GameModeBadge';
 import { CourtGameProgress } from './CourtGameProgress';
 import { getCourtHeight, getCourtColumnLabel } from '@/src/constants/court';
 import { formatCleanupRemaining, formatElapsed } from '@/src/utils/courtTime';
-import { colors, borderRadius } from '@/src/theme';
+import { colors } from '@/src/theme';
+
+/** 코트는 직각에 가까운 깔끔한 모서리 (미세 라운드로 계단현상만 방지) */
+const COURT_CARD_RADIUS = 2;
 
 interface CourtCardProps {
   court: Court;
@@ -17,6 +20,10 @@ interface CourtCardProps {
   isDimmed?: boolean;
   courtWidth: number;
   compact?: boolean;
+  /** 카드 좌우 패딩 (반응형) */
+  hPad?: number;
+  /** 카드 상단 여백 (예약 태그 공간, 반응형) */
+  chromeTop?: number;
 }
 
 export function CourtCard({
@@ -26,9 +33,11 @@ export function CourtCard({
   isDimmed,
   courtWidth,
   compact = true,
+  hPad = 3,
+  chromeTop = 14,
 }: CourtCardProps) {
   const courtHeight = getCourtHeight(courtWidth);
-  const radius = compact ? borderRadius.squish : borderRadius.lg;
+  const radius = COURT_CARD_RADIUS;
   const canJoin = court.status === 'playing' && court.players.length >= 2 && court.players.length < 4;
   const showProfiles = court.players.length > 0;
   const avatarSize = compact
@@ -47,7 +56,7 @@ export function CourtCard({
       onPress={() => onPress(court)}
       style={({ pressed }) => [
         styles.wrapper,
-        { width: courtWidth },
+        { width: courtWidth, paddingTop: chromeTop, paddingHorizontal: hPad },
         isDimmed && styles.dimmed,
         pressed && styles.pressed,
       ]}
@@ -153,8 +162,6 @@ export function CourtCard({
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingTop: 14,
-    paddingHorizontal: 3,
     paddingBottom: 3,
     ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },

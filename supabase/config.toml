@@ -1,0 +1,14 @@
+# For CLI / GitHub integration (Supabase Dashboard → Integrations → GitHub)
+project_id = "YOUR_PROJECT_REF"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
+
+[db.migrations]
+enabled = true
+
+[storage]
+enabled = true

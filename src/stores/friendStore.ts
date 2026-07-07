@@ -1,8 +1,16 @@
 import { create } from 'zustand';
 import type { FriendRequest } from '@/src/types';
 import { persistAppState } from '@/src/services/appState';
+import { isSupabaseEnabled } from '@/src/lib/supabase';
 import { useAuthStore } from './authStore';
 import { useNotificationStore } from './notificationStore';
+
+function remoteFriend(fn: (m: typeof import('@/src/services/supabase/social')) => Promise<unknown>) {
+  if (!isSupabaseEnabled()) return;
+  import('@/src/services/supabase/social')
+    .then(fn)
+    .catch((err) => console.warn('[friend] sync failed', err));
+}
 
 export type FriendRelationStatus = 'none' | 'pending_out' | 'pending_in' | 'friends';
 export type { FriendState };
@@ -107,6 +115,21 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     set((state) => ({ friendRequests: [req, ...state.friendRequests] }));
     persistAppState();
 
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/social')
+        .then(({ sendFriendRequestRemote }) =>
+          sendFriendRequestRemote(req).then((remoteId) => {
+            if (!remoteId) return;
+            set((state) => ({
+              friendRequests: state.friendRequests.map((r) =>
+                r.id === req.id ? { ...r, id: remoteId } : r
+              ),
+            }));
+          })
+        )
+        .catch((err) => console.warn('[friend] send failed', err));
+    }
+
     useNotificationStore.getState().pushInbox({
       type: 'friend',
       title: '친구 신청',
@@ -134,6 +157,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       };
     });
     persistAppState();
+    remoteFriend((m) => m.respondFriendRequestRemote(requestId, 'accepted'));
 
     const toUser = useAuthStore.getState().users.find((u) => u.id === userId);
     useNotificationStore.getState().pushInbox({
@@ -157,6 +181,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       ),
     }));
     persistAppState();
+    remoteFriend((m) => m.respondFriendRequestRemote(requestId, 'rejected'));
     return { success: true, message: '친구 신청을 거절했어요.' };
   },
 
@@ -169,6 +194,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       friendRequests: state.friendRequests.filter((r) => r.id !== requestId),
     }));
     persistAppState();
+    remoteFriend((m) => m.deleteFriendRequestRemote(requestId));
     return { success: true, message: '친구 신청을 취소했어요.' };
   },
 
@@ -182,6 +208,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       return { friendships };
     });
     persistAppState();
+    remoteFriend((m) => m.removeFriendRemote(userId, friendId));
     return { success: true, message: '친구를 삭제했어요.' };
   },
 
@@ -196,6 +223,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       ),
     }));
     persistAppState();
+    remoteFriend((m) => m.respondFriendRequestRemote(requestId, 'rejected'));
     return { success: true, message: '친구 신청을 거절 처리했어요.' };
   },
 }));

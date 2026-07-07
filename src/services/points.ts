@@ -1,12 +1,11 @@
 import {
-  FULL_MEMBER_POINT_MULTIPLIER,
-  MIN_RESERVE_POINTS,
   PEAK_HOURS,
   PEAK_TIME_RESERVATION_LIMIT,
-  RANK_ORDER,
-  RANK_THRESHOLDS,
-  CENTER_COURTS,
-} from '@/src/constants';
+  POINT_EARN,
+  POINT_SPEND,
+  RANK_RESERVATION_DISCOUNT,
+} from '@/src/constants/points';
+import { RANK_ORDER, RANK_THRESHOLDS, CENTER_COURTS } from '@/src/constants';
 import type { MembershipTier, RankTier } from '@/src/types';
 
 export function getRankFromElo(elo: number): RankTier {
@@ -17,41 +16,38 @@ export function getRankFromElo(elo: number): RankTier {
   return 'bronze';
 }
 
-export function getReservationCost(
-  rank: RankTier,
-  isPeakTime: boolean,
-  isCenterCourt = false
-): number {
-  let baseCost = isPeakTime ? 25 : 20;
-  if (isCenterCourt) baseCost = Math.round(baseCost * 1.5);
-  const rankIndex = RANK_ORDER.indexOf(rank);
-  const discount = rankIndex * 2;
-  return Math.max(5, baseCost - discount);
-}
-
 export function isCenterCourtId(courtId: number): boolean {
   return CENTER_COURTS.includes(courtId);
 }
 
-export function applyPointMultiplier(
-  points: number,
-  membershipTier: MembershipTier
-): number {
-  if (membershipTier === 'full') {
-    return Math.round(points * FULL_MEMBER_POINT_MULTIPLIER);
+/** 정회원 +150p / 준회원 +100p */
+export function getAttendancePoints(membershipTier: MembershipTier): number {
+  if (membershipTier === 'full' || membershipTier === 'admin') {
+    return POINT_EARN.ATTENDANCE_FULL;
   }
-  return points;
+  return POINT_EARN.ATTENDANCE_ASSOCIATE;
+}
+
+/** Gold+ 랭크 티어 할인 적용 — 일반 20p / 중앙 30p 기준 */
+export function getReservationCost(rank: RankTier, isCenterCourt = false): number {
+  const base = isCenterCourt ? POINT_SPEND.COURT_CENTER : POINT_SPEND.COURT_GENERAL;
+  const discount = RANK_RESERVATION_DISCOUNT[rank] ?? 0;
+  return Math.max(1, Math.round(base * (1 - discount)));
+}
+
+export function getRankDiscountPercent(rank: RankTier): number {
+  return Math.round((RANK_RESERVATION_DISCOUNT[rank] ?? 0) * 100);
 }
 
 export function canReserve(
-  userPoints: number,
   peakTimeReservations: number,
-  isPeakTime: boolean
+  isPeakTime: boolean,
+  hasActiveCourt: boolean
 ): { allowed: boolean; reason?: string } {
-  if (userPoints < MIN_RESERVE_POINTS) {
+  if (hasActiveCourt) {
     return {
       allowed: false,
-      reason: `최소 ${MIN_RESERVE_POINTS}포인트가 필요해요. (현재: ${userPoints}P)`,
+      reason: '이미 코트를 예약·이용 중이에요. 반납 후 다른 코트를 예약할 수 있어요.',
     };
   }
 
@@ -66,28 +62,29 @@ export function canReserve(
 }
 
 export function isPeakTime(now: Date = new Date()): boolean {
-  return PEAK_HOURS.includes(now.getHours());
+  return (PEAK_HOURS as readonly number[]).includes(now.getHours());
 }
 
-export function calculateWinPoints(
-  membershipTier: MembershipTier,
-  opponentAvgElo: number,
-  userElo: number,
-  ranked = true
-): number {
-  if (!ranked) return 0;
-  const base = 50;
-  const upsetBonus =
-    opponentAvgElo > userElo ? Math.min(10, Math.floor((opponentAvgElo - userElo) / 50)) : 0;
-  return applyPointMultiplier(base + upsetBonus, membershipTier);
+/** 랭크전 승리 — 팀원당 고정 +50p */
+export function calculateWinPoints(ranked = true): number {
+  return ranked ? POINT_EARN.RANKED_WIN : 0;
 }
 
-export function calculateCleaningPoints(membershipTier: MembershipTier): number {
-  return applyPointMultiplier(15, membershipTier);
+export function calculateCleaningPoints(): number {
+  return POINT_EARN.CLEANING;
+}
+
+export function calculateNetSetupPoints(): number {
+  return POINT_EARN.NET_SETUP;
 }
 
 export function getWinRate(wins: number, losses: number): number {
   const total = wins + losses;
   if (total === 0) return 0;
   return Math.round((wins / total) * 100);
+}
+
+/** @deprecated 정책상 멤버십 배율 없음 — getAttendancePoints 사용 */
+export function applyPointMultiplier(points: number, _membershipTier: MembershipTier): number {
+  return points;
 }

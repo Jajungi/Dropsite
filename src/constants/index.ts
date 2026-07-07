@@ -24,10 +24,14 @@ export const MAX_PLAYERS_PER_COURT = 4;
 export const MIN_TEAM_MEMBERS = 2;
 export const MAX_TEAM_MEMBERS = 4;
 
+export {
+  MIN_RESERVE_POINTS,
+  PEAK_TIME_RESERVATION_LIMIT,
+  PEAK_HOURS,
+} from '@/src/constants/points';
+
+/** @deprecated 멤버십 배율 미사용 — 정책상 고정 포인트 */
 export const FULL_MEMBER_POINT_MULTIPLIER = 1.2;
-export const MIN_RESERVE_POINTS = 30;
-export const PEAK_TIME_RESERVATION_LIMIT = 2;
-export const PEAK_HOURS = [19, 20];
 
 export const RANK_THRESHOLDS: Record<RankTier, { min: number; label: string; color: string }> = {
   bronze: { min: 0, label: '브론즈', color: '#CD7F32' },

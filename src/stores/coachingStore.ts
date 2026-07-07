@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { CoachAnnouncement } from '@/src/types';
 import { MOCK_COACH_ANNOUNCEMENTS } from '@/src/services/mockData';
 import { persistAppState } from '@/src/services/appState';
+import { isSupabaseEnabled } from '@/src/lib/supabase';
 import { recordAdminLogAsCurrentUser } from '@/src/services/adminLog';
 
 interface CoachingState {
@@ -46,6 +47,22 @@ export const useCoachingStore = create<CoachingState>((set, get) => ({
     set((state) => ({
       announcements: [entry, ...state.announcements],
     }));
+
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/social')
+        .then(({ insertCoachAnnouncementRemote }) =>
+          insertCoachAnnouncementRemote(entry).then((remoteId) => {
+            if (!remoteId) return;
+            set((state) => ({
+              announcements: state.announcements.map((a) =>
+                a.id === entry.id ? { ...a, id: remoteId } : a
+              ),
+            }));
+          })
+        )
+        .catch((err) => console.warn('[coach] post failed', err));
+    }
+
     recordAdminLogAsCurrentUser({
       category: 'lesson',
       action: 'coach.announcement',
@@ -59,6 +76,11 @@ export const useCoachingStore = create<CoachingState>((set, get) => ({
     set((state) => ({
       announcements: state.announcements.filter((a) => a.id !== id),
     }));
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/social')
+        .then(({ deleteCoachAnnouncementRemote }) => deleteCoachAnnouncementRemote(id))
+        .catch((err) => console.warn('[coach] remove failed', err));
+    }
     persistAppState();
   },
 }));

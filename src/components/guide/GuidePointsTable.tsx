@@ -1,14 +1,22 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { POINT_EARN, POINT_SPEND } from '@/src/constants/points';
 import { colors, borderRadius, spacing, typography } from '@/src/theme';
 
 const ROWS: { category: string; activity: string; points: string; positive?: boolean }[] = [
-  { category: '적립 (+)', activity: '체육관 출석 인증 (500m 내)', points: '준회원 +100p / 정회원 +120p', positive: true },
-  { category: '적립 (+)', activity: '일반 랭킹전 승리 (관리자 확정)', points: '승리 팀원당 +50p', positive: true },
-  { category: '적립 (+)', activity: '이달의 청소·정리 기여왕 (Top 5)', points: '+150p ~ +500p 차등', positive: true },
-  { category: '적립 (+)', activity: '신입 부원 웰컴 리워드', points: '가입 축하 +500p', positive: true },
-  { category: '사용 (-)', activity: '일반 코트 예약 (1게임당)', points: '-20p', positive: false },
-  { category: '사용 (-)', activity: '중앙 코트 예약 (4·5·6번)', points: '-30p (1.5배)', positive: false },
+  { category: '적립 (+)', activity: '동아리비 납부 인증', points: `+${POINT_EARN.CLUB_FEE}p`, positive: true },
+  {
+    category: '적립 (+)',
+    activity: '체육관 출석 인증 (500m 내)',
+    points: `정회원 +${POINT_EARN.ATTENDANCE_FULL}p / 준회원 +${POINT_EARN.ATTENDANCE_ASSOCIATE}p`,
+    positive: true,
+  },
+  { category: '적립 (+)', activity: '청소 및 정리 인증', points: `+${POINT_EARN.CLEANING}p`, positive: true },
+  { category: '적립 (+)', activity: '네트 설치 및 철거 인증', points: `+${POINT_EARN.NET_SETUP}p`, positive: true },
+  { category: '적립 (+)', activity: '일반 랭킹전 승리 (팀원당)', points: `+${POINT_EARN.RANKED_WIN}p`, positive: true },
+  { category: '사용 (-)', activity: '일반 코트 예약 (1게임당)', points: `-${POINT_SPEND.COURT_GENERAL}p`, positive: false },
+  { category: '사용 (-)', activity: '중앙 코트 예약 (4~6번)', points: `-${POINT_SPEND.COURT_CENTER}p`, positive: false },
+  { category: '사용 (-)', activity: '새 경기용 셔틀콕 수령', points: `-${POINT_SPEND.SHUTTLECOCK}p`, positive: false },
 ];
 
 export function GuidePointsTable() {

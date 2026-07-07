@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Svg, { Polyline, Circle, Line, Text as SvgText } from 'react-native-svg';
 import type { EloHistoryPoint } from '@/src/types';
 import { colors, spacing, typography } from '@/src/theme';
+import { ProfileEmptyState } from './ProfileEmptyState';
 
 interface EloChartProps {
   data: EloHistoryPoint[];
@@ -10,11 +11,25 @@ interface EloChartProps {
   height?: number;
 }
 
-export function EloChart({ data, width = 300, height = 120 }: EloChartProps) {
-  if (data.length < 2) return null;
+export function EloChart({ data, width, height = 120 }: EloChartProps) {
+  const [measured, setMeasured] = useState(0);
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = Math.floor(e.nativeEvent.layout.width);
+    if (w && w !== measured) setMeasured(w);
+  };
 
+  if (data.length < 2) {
+    return (
+      <View style={styles.container} onLayout={onLayout}>
+        <Text style={styles.title}>Elo 레이팅 추이</Text>
+        <ProfileEmptyState message="아직 기록이 없어요" hint="랭크전 결과가 쌓이면 그래프가 표시돼요" />
+      </View>
+    );
+  }
+
+  const chartWidth = width ?? (measured > 0 ? measured : 300);
   const padding = { top: 10, right: 10, bottom: 24, left: 36 };
-  const chartW = width - padding.left - padding.right;
+  const chartW = chartWidth - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
 
   const elos = data.map((d) => d.elo);
@@ -30,9 +45,9 @@ export function EloChart({ data, width = 300, height = 120 }: EloChartProps) {
   const polyline = points.map((p) => `${p.x},${p.y}`).join(' ');
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={onLayout}>
       <Text style={styles.title}>Elo 레이팅 추이</Text>
-      <Svg width={width} height={height}>
+      <Svg width={chartWidth} height={height}>
         <Line
           x1={padding.left}
           y1={padding.top + chartH}

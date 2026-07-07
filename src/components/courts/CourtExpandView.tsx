@@ -4,9 +4,10 @@ import {
   StyleSheet,
   Pressable,
   Text,
-  Platform,
+  useWindowDimensions,
   type View as RNView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   Extrapolation,
@@ -22,6 +23,7 @@ import { CourtGrid } from './CourtGrid';
 import { CourtIllustration } from './CourtIllustration';
 import { CourtPlayerProfiles } from './CourtPlayerProfiles';
 import { CourtDetailContent, type CourtDetailContentProps } from './CourtDetailContent';
+import { TouchGuard } from '@/src/components/ui/TouchGuard';
 import { getCourtHeight, COURT_ASPECT } from '@/src/constants/court';
 import { useLayoutMode } from '@/src/hooks/useLayoutMode';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
@@ -35,7 +37,10 @@ interface CourtExpandViewProps {
   onRegisterClose: (close: () => void) => void;
   filter?: 'all' | 'empty' | 'mine';
   myUserId?: string;
-  detailProps: Omit<CourtDetailContentProps, 'court' | 'courtPreviewWidth' | 'hideCourtPreview' | 'embedded'>;
+  detailProps: Omit<
+    CourtDetailContentProps,
+    'court' | 'courtPreviewWidth' | 'hideCourtPreview' | 'embedded' | 'onDismiss'
+  >;
 }
 
 const EXPAND_MS = 360;
@@ -44,6 +49,18 @@ const EXPAND_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 const COLLAPSE_EASING = Easing.bezier(0.4, 0, 0.2, 1);
 const EXPAND_TIMING = { duration: EXPAND_MS, easing: EXPAND_EASING };
 const COLLAPSE_TIMING = { duration: COLLAPSE_MS, easing: COLLAPSE_EASING };
+const DETAIL_GAP = 8;
+const DETAIL_HEADER_H = 48;
+const CLUSTER_PAD = 12;
+
+type ExpandedLayout = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  detailTop: number;
+  detailHeight: number;
+};
 
 export function CourtExpandView({
   courts,
@@ -56,11 +73,14 @@ export function CourtExpandView({
   myUserId,
   detailProps,
 }: CourtExpandViewProps) {
-  const { gridPadding, contentWidth, isDesktop } = useLayoutMode();
+  const { gridPadding, contentWidth, isDesktop, headerHeight, tabBarHeight } = useLayoutMode();
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const containerRef = useRef<RNView>(null);
   const cardRefs = useRef<Map<number, RNView>>(new Map());
   const pendingCourtRef = useRef<Court | null>(null);
   const [containerSize, setContainerSize] = useState({ width: contentWidth, height: 400 });
+  const [containerScreenY, setContainerScreenY] = useState(0);
 
   const progress = useSharedValue(0);
   const originX = useSharedValue(0);
@@ -71,39 +91,78 @@ export function CourtExpandView({
   const targetY = useSharedValue(8);
   const targetW = useSharedValue(contentWidth - gridPadding * 2);
   const targetH = useSharedValue(getCourtHeight(contentWidth - gridPadding * 2));
+  const detailTopY = useSharedValue(0);
+  const detailPanelH = useSharedValue(280);
 
   const computeTarget = useCallback(
-    (containerW: number, containerH: number) => {
+    (containerW: number, containerH: number, screenY?: number): ExpandedLayout => {
       const pad = gridPadding;
+      const visibleTop = insets.top + headerHeight;
+      const visibleBottom = windowHeight - tabBarHeight;
+      const visibleHeight = visibleBottom - visibleTop;
+
       const maxWidth = isDesktop ? Math.min(containerW - pad * 2, 480) : containerW - pad * 2;
+      const detailBodyH = Math.min(340, Math.max(180, visibleHeight * 0.4));
+      const detailHeight = DETAIL_HEADER_H + detailBodyH;
+      const clusterGap = DETAIL_GAP;
+
       let width = maxWidth;
       let height = getCourtHeight(width);
-      const maxH = containerH * (isDesktop ? 0.24 : 0.2);
-      if (height > maxH) {
-        height = maxH;
+      const maxCourtH = visibleHeight - detailHeight - clusterGap - CLUSTER_PAD * 2;
+      if (height > maxCourtH) {
+        height = Math.max(72, maxCourtH);
         width = height * COURT_ASPECT;
       }
-      return { x: (containerW - width) / 2, y: 4, width, height };
+
+      const clusterHeight = height + clusterGap + detailHeight;
+      const visibleCenter = (visibleTop + visibleBottom) / 2;
+      const clusterTopInViewport = visibleCenter - clusterHeight / 2;
+
+      let y = clusterTopInViewport - (screenY ?? 0);
+      y = Math.max(CLUSTER_PAD, Math.min(y, containerH - clusterHeight - CLUSTER_PAD));
+
+      const detailTop = y + height + clusterGap;
+
+      return {
+        x: (containerW - width) / 2,
+        y,
+        width,
+        height,
+        detailTop,
+        detailHeight,
+      };
     },
-    [gridPadding, isDesktop]
+    [gridPadding, headerHeight, insets.top, isDesktop, tabBarHeight, windowHeight]
   );
 
-  const updateTargets = useCallback(
-    (containerW: number, containerH: number) => {
-      const t = computeTarget(containerW, containerH);
+  const applyTarget = useCallback(
+    (containerW: number, containerH: number, screenY?: number) => {
+      const t = computeTarget(containerW, containerH, screenY);
       targetX.value = t.x;
       targetY.value = t.y;
       targetW.value = t.width;
       targetH.value = t.height;
+      detailTopY.value = t.detailTop;
+      detailPanelH.value = t.detailHeight;
+      if (screenY !== undefined) setContainerScreenY(screenY);
     },
-    [computeTarget, targetH, targetW, targetX, targetY]
+    [computeTarget, detailPanelH, detailTopY, targetH, targetW, targetX, targetY]
   );
+
+  const remeasureTarget = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.measureInWindow((_cx, cy) => {
+      applyTarget(containerSize.width, containerSize.height, cy);
+    });
+  }, [applyTarget, containerSize.height, containerSize.width]);
 
   const measureAndSetOrigin = useCallback(
     (courtId: number, containerW: number, containerH: number, onReady?: () => void) => {
       const cardView = cardRefs.current.get(courtId);
       const container = containerRef.current;
       if (!cardView || !container) {
+        remeasureTarget();
         onReady?.();
         return;
       }
@@ -113,12 +172,12 @@ export function CourtExpandView({
           originY.value = my - cy;
           originW.value = mw;
           originH.value = mh;
-          updateTargets(containerW, containerH);
+          applyTarget(containerW, containerH, cy);
           onReady?.();
         });
       });
     },
-    [originH, originW, originX, originY, updateTargets]
+    [applyTarget, originH, originW, originX, originY, remeasureTarget]
   );
 
   const startExpand = useCallback(() => {
@@ -138,13 +197,13 @@ export function CourtExpandView({
   }, [onRegisterClose, requestClose]);
 
   useEffect(() => {
-    updateTargets(containerSize.width, containerSize.height);
-  }, [containerSize, updateTargets]);
+    remeasureTarget();
+  }, [containerSize, remeasureTarget]);
 
   useEffect(() => {
     if (selectedCourtId == null) return;
     measureAndSetOrigin(selectedCourtId, containerSize.width, containerSize.height, startExpand);
-    // containerSize intentionally omitted — resize handled by updateTargets
+    // containerSize intentionally omitted — resize handled by remeasureTarget
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCourtId, measureAndSetOrigin, startExpand]);
 
@@ -197,26 +256,27 @@ export function CourtExpandView({
     zIndex: 20,
   }));
 
-  const detailStyle = useAnimatedStyle(() => {
-    const top = targetY.value + targetH.value + 8;
-    return {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      top,
-      bottom: 0,
-      opacity: interpolate(progress.value, [0.3, 0.65], [0, 1], Extrapolation.CLAMP),
-      transform: [
-        {
-          translateY: interpolate(progress.value, [0.3, 0.65], [16, 0], Extrapolation.CLAMP),
-        },
-      ],
-    };
-  });
+  const detailStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: detailTopY.value,
+    height: detailPanelH.value,
+    opacity: interpolate(progress.value, [0.3, 0.65], [0, 1], Extrapolation.CLAMP),
+    transform: [
+      {
+        translateY: interpolate(progress.value, [0.3, 0.65], [16, 0], Extrapolation.CLAMP),
+      },
+    ],
+  }));
 
-  const expandedW = computeTarget(containerSize.width, containerSize.height).width;
-  const expandedH = getCourtHeight(expandedW);
-  const expandedLayout = computeTarget(containerSize.width, containerSize.height);
+  const expandedLayout = computeTarget(
+    containerSize.width,
+    containerSize.height,
+    containerScreenY
+  );
+  const expandedW = expandedLayout.width;
+  const expandedH = expandedLayout.height;
 
   return (
     <View
@@ -243,69 +303,61 @@ export function CourtExpandView({
       {selectedCourt && (
         <>
           <Pressable
-            style={[
-              styles.sideTap,
-              {
-                left: 0,
-                top: expandedLayout.y,
-                width: expandedLayout.x,
-                height: expandedLayout.height,
-              },
-            ]}
-            onPress={requestClose}
-            accessibilityRole="button"
-            accessibilityLabel="코트 목록으로 돌아가기"
-          />
-          <Pressable
-            style={[
-              styles.sideTap,
-              {
-                left: expandedLayout.x + expandedLayout.width,
-                top: expandedLayout.y,
-                width: containerSize.width - expandedLayout.x - expandedLayout.width,
-                height: expandedLayout.height,
-              },
-            ]}
+            style={styles.dismissBackdrop}
             onPress={requestClose}
             accessibilityRole="button"
             accessibilityLabel="코트 목록으로 돌아가기"
           />
 
-          <Animated.View style={[flyingCourtStyle, styles.flyingCourt, { pointerEvents: 'none' }]}>
-            <CourtIllustration
-              court={selectedCourt}
-              width={expandedW}
-              borderRadius={borderRadius.lg}
-            />
-            <CourtPlayerProfiles
-              players={selectedCourt.players}
-              avatarSize={28}
-              courtWidth={expandedW}
-              courtHeight={expandedH}
-            />
+          <Animated.View style={flyingCourtStyle}>
+            <Pressable
+              style={styles.flyingCourt}
+              onPress={requestClose}
+              accessibilityRole="button"
+              accessibilityLabel="코트 닫기"
+            >
+              <CourtIllustration
+                court={selectedCourt}
+                width={expandedW}
+                borderRadius={borderRadius.lg}
+              />
+              <CourtPlayerProfiles
+                players={selectedCourt.players}
+                avatarSize={28}
+                courtWidth={expandedW}
+                courtHeight={expandedH}
+              />
+            </Pressable>
           </Animated.View>
 
           <Animated.View
-            style={[styles.detailLayer, detailStyle, { pointerEvents: selectedCourtId ? 'auto' : 'none' }]}
+            style={[styles.detailLayer, detailStyle, { pointerEvents: selectedCourtId ? 'box-none' : 'none' }]}
           >
-            <View style={styles.detailHeader}>
-              <Pressable onPress={requestClose} style={styles.backBtn} hitSlop={8}>
-                <Text style={styles.backText}>← 코트 목록</Text>
-              </Pressable>
-              <View style={styles.headerRight}>
+            <View style={styles.detailHeader} pointerEvents="box-none">
+              <TouchGuard>
+                <Pressable onPress={requestClose} style={styles.backBtn}>
+                  <Text style={styles.backText}>← 코트 목록</Text>
+                </Pressable>
+              </TouchGuard>
+              <Pressable style={styles.headerCenter} onPress={requestClose}>
                 <Text style={styles.detailTitle}>{selectedCourt.id}번</Text>
-                <Pressable onPress={requestClose} style={styles.closeBtn} hitSlop={12}>
+              </Pressable>
+              <TouchGuard>
+                <Pressable onPress={requestClose} style={styles.closeBtn}>
                   <Text style={styles.closeText}>✕</Text>
                 </Pressable>
-              </View>
+              </TouchGuard>
             </View>
-            <CourtDetailContent
-              court={selectedCourt}
-              hideCourtPreview
-              embedded
-              courtPreviewWidth={expandedW}
-              {...detailProps}
-            />
+            <View style={styles.detailBody}>
+              <CourtDetailContent
+                court={selectedCourt}
+                hideCourtPreview
+                embedded
+                courtPreviewWidth={expandedW}
+                onDismiss={requestClose}
+                {...detailProps}
+              />
+            </View>
           </Animated.View>
         </>
       )}
@@ -316,31 +368,39 @@ export function CourtExpandView({
 const styles = StyleSheet.create({
   container: { flex: 1, minHeight: 200 },
   gridLayer: {},
-  flyingCourt: { overflow: 'hidden' },
-  sideTap: {
-    position: 'absolute',
-    zIndex: 18,
-    ...Platform.select({ web: { cursor: 'pointer' as const } }),
+  dismissBackdrop: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 16,
   },
+  flyingCourt: { flex: 1, overflow: 'hidden' },
   detailLayer: {
+    zIndex: 25,
     backgroundColor: colors.surfaceAlt,
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
+    flexDirection: 'column',
+  },
+  detailBody: {
+    flex: 1,
+    minHeight: 0,
   },
   detailHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
-  backBtn: { paddingVertical: 4 },
+  backBtn: { paddingVertical: 4, paddingHorizontal: 2 },
   backText: { ...typography.button, color: colors.primary, fontSize: 14 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
   detailTitle: { ...typography.h3, color: colors.text, fontSize: 16 },
   closeBtn: {
     width: 32,

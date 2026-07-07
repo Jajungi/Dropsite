@@ -7,19 +7,27 @@ const dropLogo = require('../../../assets/images/drop-logo.png');
 
 interface DropBrandProps {
   compact?: boolean;
+  scale?: number;
 }
 
-export function DropBrand({ compact }: DropBrandProps) {
+export function DropBrand({ compact, scale = 1 }: DropBrandProps) {
+  const logoSize = Math.round((compact ? 30 : 36) * scale);
+  const clubSize = Math.round((compact ? 14 : 16) * scale);
+  const clubLine = Math.round((compact ? 16 : 18) * scale);
+
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
       <Image
         source={dropLogo}
-        style={[styles.logo, compact && styles.logoCompact]}
+        style={[styles.logo, { width: logoSize, height: logoSize }]}
         resizeMode="contain"
         accessibilityLabel="Drop 로고"
       />
       <View style={styles.textCol}>
-        <Text style={[styles.club, compact && styles.clubCompact]} numberOfLines={1}>
+        <Text
+          style={[styles.club, compact && styles.clubCompact, { fontSize: clubSize, lineHeight: clubLine }]}
+          numberOfLines={1}
+        >
           {CLUB_NAME}
         </Text>
         {!compact && <Text style={styles.school}>{SCHOOL_NAME}</Text>}

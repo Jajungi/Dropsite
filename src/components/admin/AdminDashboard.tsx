@@ -7,14 +7,16 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
-import { useAuthStore } from '@/src/stores/authStore';
+import { useAuthStore, useAppStore } from '@/src/stores/authStore';
 import { useNotificationStore } from '@/src/stores/notificationStore';
 import { useLessonStore } from '@/src/stores/lessonStore';
 import { useCourtStore } from '@/src/stores/courtStore';
 import { useFriendStore } from '@/src/stores/friendStore';
-import { usePointStore } from '@/src/stores/pointStore';
 import { useLobbyStore } from '@/src/stores/lobbyStore';
 import { useAdminLogStore } from '@/src/stores/adminLogStore';
+import { useAdminAlertStore } from '@/src/stores/adminAlertStore';
+import { useAdminAlerts } from '@/src/hooks/useAdminAlerts';
+import { Ionicons } from '@expo/vector-icons';
 import { recordAdminLogAsActor } from '@/src/services/adminLog';
 import { persistAppState } from '@/src/services/appState';
 import { Button } from '@/src/components/ui/Button';
@@ -24,6 +26,7 @@ import { RankBadge } from '@/src/components/ui/RankBadge';
 import { AdminLogPanel } from '@/src/components/admin/AdminLogPanel';
 import { MemberAdminPanel } from '@/src/components/admin/MemberAdminPanel';
 import { AdminOperationsPanel } from '@/src/components/admin/AdminOperationsPanel';
+import { AdminPointsPanel } from '@/src/components/admin/AdminPointsPanel';
 import { GAME_MODE_CONFIG } from '@/src/constants/court';
 import { getEffectiveSchedule, getTodayKey, formatTodayLabel } from '@/src/utils/dateFormat';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
@@ -52,6 +55,7 @@ const LESSON_STATUS_LABEL: Record<string, string> = {
 
 type AdminSection =
   | 'overview'
+  | 'alerts'
   | 'operations'
   | 'members'
   | 'matches'
@@ -60,7 +64,8 @@ type AdminSection =
   | 'attendance'
   | 'social'
   | 'points'
-  | 'logs';
+  | 'logs'
+  | 'developer';
 
 interface AdminDashboardProps {
   adminId: string;
@@ -81,11 +86,9 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
   const adminRefundAndReturn = useCourtStore((s) => s.adminRefundAndReturn);
   const pendingMatches = useNotificationStore((s) => s.pendingMatches);
   const matchHistory = useNotificationStore((s) => s.matchHistory);
-  const cleaningLeaderboard = useNotificationStore((s) => s.cleaningLeaderboard);
   const confirmMatch = useNotificationStore((s) => s.confirmMatch);
   const adminCancelPendingMatch = useNotificationStore((s) => s.adminCancelPendingMatch);
   const adminRevokeConfirmedMatch = useNotificationStore((s) => s.adminRevokeConfirmedMatch);
-  const adminRevokeCleaning = useNotificationStore((s) => s.adminRevokeCleaning);
   const showToast = useNotificationStore((s) => s.showToast);
   const lessonQueue = useLessonStore((s) => s.lessonQueue);
   const setNextInQueue = useLessonStore((s) => s.setNextInQueue);
@@ -94,10 +97,15 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
   const adminRemoveFromQueue = useLessonStore((s) => s.adminRemoveFromQueue);
   const friendRequests = useFriendStore((s) => s.friendRequests);
   const adminDismissFriendRequest = useFriendStore((s) => s.adminDismissFriendRequest);
-  const pointTransactions = usePointStore((s) => s.transactions);
   const lobbyRooms = useLobbyStore((s) => s.rooms);
   const adminLogs = useAdminLogStore((s) => s.logs);
   const clearAdminLogs = useAdminLogStore((s) => s.clear);
+  const demoMode = useAppStore((s) => s.demoMode);
+  const setDemoMode = useAppStore((s) => s.setDemoMode);
+  const infinitePoints = useAppStore((s) => s.infinitePoints);
+  const setInfinitePoints = useAppStore((s) => s.setInfinitePoints);
+  const adminAlerts = useAdminAlerts();
+  const dismissAlert = useAdminAlertStore((s) => s.dismiss);
 
   const [section, setSection] = useState<AdminSection>('overview');
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
@@ -125,11 +133,6 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
     return { empty, playing, reserved, total: courts.length };
   }, [courts]);
 
-  const topPointHolders = useMemo(
-    () => [...approvedMembers].sort((a, b) => b.points - a.points).slice(0, 5),
-    [approvedMembers]
-  );
-
   const resolveUser = (id: string) => users.find((u) => u.id === id);
 
   const logCourtReturn = (court: Court) => {
@@ -145,6 +148,7 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
 
   const sections: { key: AdminSection; label: string; badge?: number }[] = [
     { key: 'overview', label: '요약' },
+    { key: 'alerts', label: '알림', badge: adminAlerts.length || undefined },
     { key: 'operations', label: '운영' },
     { key: 'logs', label: '로그', badge: adminLogs.length ? undefined : undefined },
     {
@@ -174,6 +178,7 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
     },
     { key: 'points', label: '포인트' },
     { key: 'courts', label: '코트' },
+    { key: 'developer', label: '개발자' },
   ];
 
   return (
@@ -244,6 +249,48 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
         </View>
       )}
 
+      {section === 'alerts' && (
+        <View style={styles.sectionBody}>
+          <Card style={styles.block}>
+            <View style={styles.blockHeader}>
+              <Text style={styles.blockTitle}>확인이 필요한 알림 ({adminAlerts.length})</Text>
+            </View>
+            {adminAlerts.length === 0 && (
+              <Text style={styles.empty}>새 알림이 없습니다</Text>
+            )}
+            {adminAlerts.map((alert) => (
+              <View key={alert.id} style={styles.alertCard}>
+                <Pressable
+                  style={styles.alertBody}
+                  onPress={() => {
+                    setSection(alert.section);
+                    dismissAlert(alert.id);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${alert.title} — 처리하러 가기`}
+                >
+                  <View style={styles.alertDot} />
+                  <View style={styles.alertText}>
+                    <Text style={styles.itemTitle}>{alert.title}</Text>
+                    <Text style={styles.itemSub}>{alert.subtitle}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </Pressable>
+                <Pressable
+                  style={styles.alertDismiss}
+                  onPress={() => dismissAlert(alert.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="알림 확인 (숨기기)"
+                  hitSlop={8}
+                >
+                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ))}
+          </Card>
+        </View>
+      )}
+
       {section === 'operations' && (
         <View style={styles.sectionBody}>
           <AdminOperationsPanel
@@ -267,6 +314,27 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
                 persistAppState();
                 showToast({ type: 'info', title: '', message: '활동 로그를 비웠어요.' });
               }}
+            />
+          </Card>
+        </View>
+      )}
+
+      {section === 'developer' && (
+        <View style={styles.sectionBody}>
+          <Card style={styles.block}>
+            <Text style={styles.blockTitle}>개발자 모드</Text>
+            <DevToggle
+              label="데모 모드"
+              hint="위치·활동 시간 제한 없이 전 기능 체험 (실제 배포 시 OFF)"
+              value={demoMode}
+              onToggle={() => setDemoMode(!demoMode)}
+            />
+            <View style={styles.devDivider} />
+            <DevToggle
+              label="무한 포인트 모드"
+              hint="ON: 999,999P 부여 · OFF: 켜기 전 포인트로 복귀 (실제 차감·적립은 정상 동작)"
+              value={infinitePoints}
+              onToggle={() => setInfinitePoints(!infinitePoints)}
             />
           </Card>
         </View>
@@ -719,80 +787,12 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
       )}
 
       {section === 'points' && (
-        <View style={styles.sectionBody}>
-          <Card style={styles.block}>
-            <Text style={styles.blockTitle}>포인트 TOP 5</Text>
-            {topPointHolders.map((user, i) => (
-              <View key={user.id} style={styles.itemCard}>
-                <View style={styles.itemRow}>
-                  <Text style={styles.rankNum}>{i + 1}</Text>
-                  <Avatar name={user.name} color={user.avatarColor} size={32} />
-                  <View style={styles.itemBody}>
-                    <Text style={styles.itemTitle}>{user.name}</Text>
-                    <Text style={styles.itemSub}>{user.membershipTier}</Text>
-                  </View>
-                  <Text style={styles.pointValue}>{user.points.toLocaleString()}P</Text>
-                </View>
-              </View>
-            ))}
-          </Card>
-
-          <Card style={styles.block}>
-            <Text style={styles.blockTitle}>청소 기여 순위</Text>
-            {cleaningLeaderboard.length === 0 && (
-              <Text style={styles.empty}>청소 기록이 없습니다</Text>
-            )}
-            {cleaningLeaderboard.slice(0, 5).map((entry, i) => (
-              <View key={entry.id} style={styles.itemCard}>
-                <Text style={styles.itemTitle}>
-                  {i + 1}. {entry.userName}
-                  {entry.revokedAt ? ' (취소됨)' : ''}
-                </Text>
-                <Text style={styles.itemSub}>
-                  {entry.area} · {entry.participantCount}명 · +{entry.points}P
-                </Text>
-                {!entry.revokedAt && (
-                  <View style={styles.itemActions}>
-                    <Button
-                      title="청소 인증 취소"
-                      onPress={() => {
-                        const r = adminRevokeCleaning(entry.id, adminId);
-                        showToast({
-                          type: r.success ? 'info' : 'warning',
-                          title: '',
-                          message: r.message,
-                        });
-                      }}
-                      size="sm"
-                      variant="danger"
-                    />
-                  </View>
-                )}
-              </View>
-            ))}
-          </Card>
-
-          <Card style={styles.block}>
-            <Text style={styles.blockTitle}>최근 포인트 내역</Text>
-            {pointTransactions.slice(0, 15).map((tx) => {
-              const user = resolveUser(tx.userId);
-              return (
-                <View key={tx.id} style={styles.itemCard}>
-                  <Text style={styles.itemTitle}>
-                    {user?.name ?? tx.userId}{' '}
-                    <Text style={tx.amount >= 0 ? styles.positive : styles.negative}>
-                      {tx.amount >= 0 ? '+' : ''}
-                      {tx.amount}P
-                    </Text>
-                  </Text>
-                  <Text style={styles.itemSub}>
-                    {tx.description} · {new Date(tx.createdAt).toLocaleString('ko-KR')}
-                  </Text>
-                </View>
-              );
-            })}
-          </Card>
-        </View>
+        <AdminPointsPanel
+          adminId={adminId}
+          onToast={(type, message) =>
+            showToast({ type, title: '', message })
+          }
+        />
       )}
 
       {section === 'courts' && (
@@ -877,6 +877,35 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
         </View>
       )}
     </View>
+  );
+}
+
+function DevToggle({
+  label,
+  hint,
+  value,
+  onToggle,
+}: {
+  label: string;
+  hint: string;
+  value: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={styles.demoRow}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+    >
+      <View style={styles.demoTextWrap}>
+        <Text style={styles.demoLabel}>{label}</Text>
+        <Text style={styles.demoHint}>{hint}</Text>
+      </View>
+      <View style={[styles.demoSwitch, value && styles.demoSwitchOn]}>
+        <View style={[styles.demoKnob, value && styles.demoKnobOn]} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -1130,6 +1159,36 @@ const styles = StyleSheet.create({
   },
   blockTitle: { ...typography.bodyBold, color: colors.text, marginBottom: spacing.xs },
   linkText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  demoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  demoTextWrap: { flex: 1, gap: 4 },
+  demoLabel: { ...typography.bodyBold, color: colors.text },
+  demoHint: { ...typography.small, color: colors.textMuted, lineHeight: 18 },
+  demoSwitch: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  demoSwitchOn: { backgroundColor: colors.primary },
+  demoKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.surface,
+  },
+  demoKnobOn: { alignSelf: 'flex-end' },
+  devDivider: {
+    height: 1,
+    backgroundColor: colors.borderSubtle,
+    marginVertical: spacing.sm,
+  },
   searchInput: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: borderRadius.sm,
@@ -1141,6 +1200,36 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
   },
   empty: { ...typography.caption, color: colors.textMuted, paddingVertical: spacing.md },
+  alertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.sm,
+    paddingRight: spacing.xs,
+  },
+  alertBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
+  },
+  alertDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.error,
+  },
+  alertText: { flex: 1, gap: 2 },
+  alertDismiss: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
+  },
   itemCard: {
     padding: spacing.md,
     backgroundColor: colors.surfaceAlt,

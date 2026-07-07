@@ -4,6 +4,13 @@ export function getTodayKey(date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** 예: 23일(금) */
+export function formatCompactDayLabel(date = new Date()): string {
+  const d = date.getDate();
+  const day = DAY_LABELS[date.getDay()];
+  return `${d}일(${day})`;
+}
+
 /** 예: 2026년 7월 7일 (화) */
 export function formatTodayLabel(date = new Date()): string {
   const y = date.getFullYear();

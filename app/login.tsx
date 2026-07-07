@@ -17,20 +17,20 @@ import { useNotificationStore } from '@/src/stores/notificationStore';
 import { DropBrand } from '@/src/components/layout/DropBrand';
 import { Button } from '@/src/components/ui/Button';
 import { Avatar } from '@/src/components/ui/Avatar';
-import { DEFAULT_DEMO_PASSWORD } from '@/src/services/authCredentials';
 import {
-  DEMO_QUICK_ACCOUNTS,
-  loadQuickLoginEntries,
-  saveQuickLoginEntry,
-  type QuickLoginEntry,
+  loadSavedLogin,
+  saveSavedLogin,
+  type SavedLoginAccount,
 } from '@/src/services/quickLogin';
 import { SCHOOL_NAME, CLUB_NAME } from '@/src/constants';
+import { isSupabaseEnvConfigured, getSupabaseSetupHint } from '@/src/lib/supabaseEnv';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'guest';
 
 export default function LoginScreen() {
   const login = useAuthStore((s) => s.login);
+  const loginAsGuest = useAuthStore((s) => s.loginAsGuest);
   const register = useAuthStore((s) => s.register);
   const showToast = useNotificationStore((s) => s.showToast);
 
@@ -39,31 +39,31 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [name, setName] = useState('');
+  const [guestName, setGuestName] = useState('');
   const [email, setEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberQuickLogin, setRememberQuickLogin] = useState(true);
-  const [savedAccounts, setSavedAccounts] = useState<QuickLoginEntry[]>([]);
+  const [savedAccount, setSavedAccount] = useState<SavedLoginAccount | null>(null);
+  const [showSavedPrompt, setShowSavedPrompt] = useState(false);
 
-  const refreshQuickLogins = useCallback(async () => {
-    const entries = await loadQuickLoginEntries();
-    setSavedAccounts(entries);
+  const refreshSavedLogin = useCallback(async () => {
+    const account = await loadSavedLogin();
+    setSavedAccount(account);
+    setShowSavedPrompt(account != null);
   }, []);
 
   useEffect(() => {
-    void refreshQuickLogins();
-  }, [refreshQuickLogins]);
+    void refreshSavedLogin();
+  }, [refreshSavedLogin]);
 
   const completeLogin = async (id: string, pw: string, displayName?: string) => {
-    const result = login(id, pw);
+    const result = await login(id, pw);
     if (result.success) {
-      if (rememberQuickLogin) {
-        const user = useAuthStore.getState().currentUser;
-        await saveQuickLoginEntry({
-          studentId: id.trim(),
-          name: displayName ?? user?.name ?? id,
-          password: pw,
-        });
-      }
+      const user = useAuthStore.getState().currentUser;
+      await saveSavedLogin({
+        studentId: id.trim(),
+        name: displayName ?? user?.name ?? id,
+        password: pw,
+      });
       router.replace('/(tabs)');
     } else {
       showToast({ type: 'warning', title: '', message: result.message });
@@ -74,12 +74,17 @@ export default function LoginScreen() {
     void completeLogin(studentId, password);
   };
 
-  const handleQuickLogin = (entry: Pick<QuickLoginEntry, 'studentId' | 'name' | 'password'>) => {
-    void completeLogin(entry.studentId, entry.password, entry.name);
+  const handleSavedLogin = () => {
+    if (!savedAccount) return;
+    void completeLogin(savedAccount.studentId, savedAccount.password, savedAccount.name);
   };
 
-  const handleDemoQuickLogin = (account: (typeof DEMO_QUICK_ACCOUNTS)[number]) => {
-    void completeLogin(account.studentId, DEFAULT_DEMO_PASSWORD, account.name);
+  const handleUseOtherAccount = () => {
+    setShowSavedPrompt(false);
+    if (savedAccount) {
+      setStudentId(savedAccount.studentId);
+    }
+    setPassword('');
   };
 
   const handleRegister = () => {
@@ -87,29 +92,35 @@ export default function LoginScreen() {
       showToast({ type: 'warning', title: '', message: '비밀번호 확인이 일치하지 않아요.' });
       return;
     }
-    const result = register({ studentId, name, email, password });
-    showToast({
-      type: result.success ? 'success' : 'warning',
-      title: '',
-      message: result.message,
-    });
-    if (result.success) {
-      setMode('login');
-      setStudentId(studentId.trim());
-      setPassword('');
-      setPasswordConfirm('');
-    }
+    void (async () => {
+      const result = await register({ studentId, name, email, password });
+      showToast({
+        type: result.success ? 'success' : 'warning',
+        title: '',
+        message: result.message,
+      });
+      if (result.success) {
+        setMode('login');
+        setStudentId(studentId.trim());
+        setPassword('');
+        setPasswordConfirm('');
+        setShowSavedPrompt(false);
+      }
+    })();
   };
 
-  const quickLoginItems: Array<
-    | { kind: 'saved'; entry: QuickLoginEntry }
-    | { kind: 'demo'; account: (typeof DEMO_QUICK_ACCOUNTS)[number] }
-  > = [
-    ...savedAccounts.map((entry) => ({ kind: 'saved' as const, entry })),
-    ...DEMO_QUICK_ACCOUNTS.filter(
-      (demo) => !savedAccounts.some((s) => s.studentId === demo.studentId)
-    ).map((account) => ({ kind: 'demo' as const, account })),
-  ];
+  const handleGuestLogin = () => {
+    void (async () => {
+      const result = await loginAsGuest(guestName);
+      if (result.success) {
+        router.replace('/(tabs)');
+      } else {
+        showToast({ type: 'warning', title: '', message: result.message });
+      }
+    })();
+  };
+
+  const supabaseReady = isSupabaseEnvConfigured();
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -118,6 +129,12 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {!supabaseReady && (
+            <View style={styles.setupBanner}>
+              <Text style={styles.setupBannerTitle}>Supabase 연결 필요</Text>
+              <Text style={styles.setupBannerText}>{getSupabaseSetupHint()}</Text>
+            </View>
+          )}
           <View style={styles.brandWrap}>
             <DropBrand />
             <Text style={styles.subtitle}>
@@ -133,47 +150,77 @@ export default function LoginScreen() {
               <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>로그인</Text>
             </Pressable>
             <Pressable
-              onPress={() => setMode('register')}
+              onPress={() => {
+                setMode('register');
+                setShowSavedPrompt(false);
+              }}
               style={[styles.tab, mode === 'register' && styles.tabActive]}
             >
               <Text style={[styles.tabText, mode === 'register' && styles.tabTextActive]}>회원가입</Text>
             </Pressable>
+            <Pressable
+              onPress={() => {
+                setMode('guest');
+                setShowSavedPrompt(false);
+              }}
+              style={[styles.tab, mode === 'guest' && styles.tabActive]}
+            >
+              <Text style={[styles.tabText, mode === 'guest' && styles.tabTextActive]}>게스트</Text>
+            </Pressable>
           </View>
 
-          {mode === 'login' && quickLoginItems.length > 0 && (
-            <View style={styles.quickSection}>
-              <Text style={styles.quickTitle}>간편 로그인</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.quickRow}
-              >
-                {quickLoginItems.map((item) => {
-                  const label = item.kind === 'saved' ? item.entry.name : item.account.name;
-                  const sid = item.kind === 'saved' ? item.entry.studentId : item.account.studentId;
-                  return (
-                    <Pressable
-                      key={sid}
-                      style={styles.quickChip}
-                      onPress={() =>
-                        item.kind === 'saved'
-                          ? handleQuickLogin(item.entry)
-                          : handleDemoQuickLogin(item.account)
-                      }
-                    >
-                      <Avatar name={label} color={colors.primary} size={40} />
-                      <Text style={styles.quickName} numberOfLines={1}>
-                        {label}
-                      </Text>
-                      <Text style={styles.quickId}>{sid.slice(-4)}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+          {mode === 'login' && showSavedPrompt && savedAccount && (
+            <View style={styles.savedCard}>
+              <View style={styles.savedHeader}>
+                <Avatar name={savedAccount.name} color={colors.primary} size={48} />
+                <View style={styles.savedMeta}>
+                  <Text style={styles.savedName}>{savedAccount.name}</Text>
+                  <Text style={styles.savedId}>{savedAccount.studentId}</Text>
+                </View>
+              </View>
+              <Text style={styles.savedQuestion}>기존 계정으로 로그인하시겠습니까?</Text>
+              <View style={styles.savedActions}>
+                <Button title="로그인" onPress={handleSavedLogin} size="sm" style={styles.savedBtn} />
+                <Button
+                  title="다른 계정"
+                  onPress={handleUseOtherAccount}
+                  size="sm"
+                  variant="outline"
+                  style={styles.savedBtn}
+                />
+              </View>
             </View>
           )}
 
           <View style={styles.form}>
+            {mode === 'guest' ? (
+              <>
+                <Text style={styles.guestIntro}>
+                  이름만 입력해 임시로 입장해요. 코트 예약·모집방 참여·이용 안내는 볼 수 있지만, 포인트·친구·랭크·기록은 사용할 수 없어요.
+                </Text>
+                <Text style={styles.label}>이름</Text>
+                <TextInput
+                  style={styles.input}
+                  value={guestName}
+                  onChangeText={setGuestName}
+                  placeholder="예: 홍길동"
+                  maxLength={12}
+                  autoCapitalize="words"
+                />
+                <Button
+                  title="게스트로 입장"
+                  onPress={handleGuestLogin}
+                  fullWidth
+                  size="lg"
+                  variant="outline"
+                  style={styles.submit}
+                />
+                <Text style={styles.hint}>
+                  정식 회원이 되면 포인트·전적·친구 기능을 모두 이용할 수 있어요.
+                </Text>
+              </>
+            ) : (
+              <>
             <Text style={styles.label}>학번</Text>
             <TextInput
               style={styles.input}
@@ -232,20 +279,6 @@ export default function LoginScreen() {
               </>
             )}
 
-            {mode === 'login' && (
-              <Pressable
-                style={styles.rememberRow}
-                onPress={() => setRememberQuickLogin((v) => !v)}
-              >
-                <Ionicons
-                  name={rememberQuickLogin ? 'checkbox' : 'square-outline'}
-                  size={20}
-                  color={rememberQuickLogin ? colors.primary : colors.textMuted}
-                />
-                <Text style={styles.rememberText}>이 기기에 간편 로그인 저장</Text>
-              </Pressable>
-            )}
-
             {mode === 'login' ? (
               <Button title="로그인" onPress={handleLogin} fullWidth size="lg" style={styles.submit} />
             ) : (
@@ -259,16 +292,12 @@ export default function LoginScreen() {
               />
             )}
 
-            {mode === 'login' && (
-              <Text style={styles.hint}>
-                데모 계정: 학번 20240001~20240005, 관리자 20230001{'\n'}
-                초기 비밀번호: {DEFAULT_DEMO_PASSWORD}
-              </Text>
-            )}
             {mode === 'register' && (
               <Text style={styles.hint}>
                 가입 후 운영진 승인이 필요합니다. 승인되면 웰컴 500P가 지급됩니다.
               </Text>
+            )}
+              </>
             )}
           </View>
         </ScrollView>
@@ -287,6 +316,25 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     width: '100%',
     alignSelf: 'center',
+  },
+  setupBanner: {
+    backgroundColor: '#FFF4E5',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#FFD8A8',
+  },
+  setupBannerTitle: {
+    ...typography.caption,
+    fontWeight: '800',
+    color: '#B45309',
+    marginBottom: 4,
+  },
+  setupBannerText: {
+    ...typography.caption,
+    color: '#92400E',
+    lineHeight: 18,
   },
   brandWrap: { alignItems: 'center', marginBottom: spacing.xl, gap: spacing.sm },
   subtitle: { ...typography.caption, color: colors.textMuted },
@@ -307,34 +355,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     ...Platform.select({ web: { boxShadow: '0 1px 4px rgba(0,0,0,0.08)' } as object }),
   },
-  tabText: { ...typography.bodyBold, color: colors.textMuted, fontSize: 14 },
+  tabText: { ...typography.bodyBold, color: colors.textMuted, fontSize: 13 },
   tabTextActive: { color: colors.primary },
-  quickSection: { marginBottom: spacing.lg },
-  quickTitle: {
-    ...typography.small,
+  guestIntro: {
+    ...typography.caption,
     color: colors.textSecondary,
-    fontWeight: '600',
+    lineHeight: 20,
     marginBottom: spacing.sm,
   },
-  quickRow: { gap: spacing.sm, paddingVertical: 2 },
-  quickChip: {
-    alignItems: 'center',
-    width: 72,
-    padding: spacing.sm,
+  savedCard: {
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
     borderRadius: borderRadius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primaryLight,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.primary + '33',
+    gap: spacing.md,
   },
-  quickName: {
-    ...typography.small,
-    color: colors.text,
-    fontWeight: '600',
-    marginTop: 4,
-    maxWidth: 68,
+  savedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  savedMeta: { flex: 1, gap: 2 },
+  savedName: { ...typography.bodyBold, color: colors.text, fontSize: 16 },
+  savedId: { ...typography.caption, color: colors.textMuted },
+  savedQuestion: {
+    ...typography.body,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
-  quickId: { ...typography.caption, color: colors.textMuted, fontSize: 10 },
+  savedActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  savedBtn: { flex: 1 },
   form: { gap: spacing.xs },
   label: {
     ...typography.small,
@@ -360,13 +415,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
   },
-  rememberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  rememberText: { ...typography.small, color: colors.textSecondary },
   submit: { marginTop: spacing.lg },
   hint: {
     ...typography.caption,

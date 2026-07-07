@@ -12,6 +12,7 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
         <meta name="theme-color" content="#3182F6" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="배드민턴" />
@@ -34,13 +35,19 @@ html, body {
   background-color: #F2F4F6;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: hidden;
 }
 
 #root, [data-expo-router-root] {
   display: flex;
   flex: 1;
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 /* 모바일 웹: 중앙 정렬 앱형 */
@@ -48,6 +55,7 @@ html, body {
   #root > div, [data-expo-router-root] > div {
     max-width: 100%;
     margin: 0 auto;
+    overflow-x: hidden;
   }
 }
 

@@ -9,6 +9,8 @@ interface GameModePickerProps {
   nantaHalf: NantaHalf;
   onChange: (mode: GameMode) => void;
   onNantaHalfChange: (half: NantaHalf) => void;
+  /** 선택 불가 모드 (예: 게스트 → ranked) */
+  disabledModes?: GameMode[];
 }
 
 export function GameModePicker({
@@ -16,6 +18,7 @@ export function GameModePicker({
   nantaHalf,
   onChange,
   onNantaHalfChange,
+  disabledModes = [],
 }: GameModePickerProps) {
   return (
     <View style={styles.wrap}>
@@ -23,13 +26,16 @@ export function GameModePicker({
         {GAME_MODES.map((mode) => {
           const config = GAME_MODE_CONFIG[mode];
           const active = value === mode;
+          const disabled = disabledModes.includes(mode);
           return (
             <Pressable
               key={mode}
-              onPress={() => onChange(mode)}
+              onPress={() => !disabled && onChange(mode)}
+              disabled={disabled}
               style={[
                 styles.modeBtn,
                 active && { backgroundColor: config.badgeBg, borderColor: config.color },
+                disabled && styles.modeBtnDisabled,
               ]}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
@@ -93,6 +99,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     ...Platform.select({ web: { cursor: 'pointer' as const } }),
   },
+  modeBtnDisabled: { opacity: 0.35 },
   modeDot: {
     width: 8,
     height: 8,

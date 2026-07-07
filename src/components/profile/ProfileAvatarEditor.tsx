@@ -10,6 +10,7 @@ interface ProfileAvatarEditorProps {
   color: string;
   imageUri?: string | null;
   size?: number;
+  compact?: boolean;
   onChange: (uri: string | null) => void;
 }
 
@@ -18,6 +19,7 @@ export function ProfileAvatarEditor({
   color,
   imageUri,
   size = 88,
+  compact = false,
   onChange,
 }: ProfileAvatarEditorProps) {
   const openPicker = () => {
@@ -37,9 +39,11 @@ export function ProfileAvatarEditor({
           <Ionicons name="camera" size={size * 0.16} color={colors.textLight} />
         </View>
       </Pressable>
-      <Pressable onPress={openPicker} style={styles.changeLink}>
-        <Text style={styles.changeText}>프로필 사진 변경</Text>
-      </Pressable>
+      {!compact && (
+        <Pressable onPress={openPicker} style={styles.changeLink}>
+          <Text style={styles.changeText}>프로필 사진 변경</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

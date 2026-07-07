@@ -1,16 +1,28 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, borderRadius, spacing, typography } from '@/src/theme';
+import { ProfileEmptyState } from './ProfileEmptyState';
 
 interface HourlyHeadcountChartProps {
-  /** 시간대별 평균 인원수 */
-  data: number[][];
+  /** 시간대별 평균 인원수 — 없으면 빈 상태 */
+  data?: number[][] | null;
   /** 내가 참여한 시간대 (같은 shape, true면 해당 칸) */
   myPresence?: boolean[][];
-  labels: { x: string[]; y: string[] };
+  labels?: { x: string[]; y: string[] };
 }
 
 export function HourlyHeadcountChart({ data, labels, myPresence }: HourlyHeadcountChartProps) {
+  const hasData = data && data.length > 0 && data.some((row) => row.some((v) => v > 0));
+
+  if (!hasData || !labels) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>시간대별 인원수</Text>
+        <ProfileEmptyState message="아직 기록이 없어요" hint="출석 데이터가 쌓이면 표시돼요" />
+      </View>
+    );
+  }
+
   const maxVal = Math.max(...data.flat(), 1);
 
   const getCrowdColor = (val: number) => {

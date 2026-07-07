@@ -51,30 +51,26 @@ export function SoftEdgeFade({
           <LinearGradient
             colors={[solid, soft, clear]}
             locations={[0, 0.55, 1]}
-            style={[styles.edge, styles.top, { height: size }]}
-            pointerEvents="none"
+            style={[styles.edge, styles.top, { height: size, pointerEvents: 'none' }]}
           />
           <LinearGradient
             colors={[clear, soft, solid]}
             locations={[0, 0.45, 1]}
-            style={[styles.edge, styles.bottom, { height: size }]}
-            pointerEvents="none"
+            style={[styles.edge, styles.bottom, { height: size, pointerEvents: 'none' }]}
           />
           <LinearGradient
             colors={[solid, soft, clear]}
             locations={[0, 0.55, 1]}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
-            style={[styles.edge, styles.left, { width: size }]}
-            pointerEvents="none"
+            style={[styles.edge, styles.left, { width: size, pointerEvents: 'none' }]}
           />
           <LinearGradient
             colors={[clear, soft, solid]}
             locations={[0, 0.45, 1]}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
-            style={[styles.edge, styles.right, { width: size }]}
-            pointerEvents="none"
+            style={[styles.edge, styles.right, { width: size, pointerEvents: 'none' }]}
           />
         </>
       )}

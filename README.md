@@ -22,6 +22,53 @@ npm run android  # Android
 npm run ios      # iOS (macOS 필요)
 ```
 
+### 여러 기기 실시간 동기화 (개발용)
+
+터미널 1 — 동기화 서버:
+
+```bash
+npm run server
+```
+
+터미널 2 — 앱 (`.env`에 서버 주소 설정):
+
+```bash
+cp .env.example .env
+npm run web
+```
+
+`.env` 예시:
+
+```
+EXPO_PUBLIC_SYNC_URL=http://localhost:3001
+```
+
+같은 Wi‑Fi의 폰에서는 `localhost` 대신 PC IP를 사용하세요 (예: `http://192.168.0.10:3001`).
+
+서버 없이도 **같은 브라우저 탭** 간에는 로컬 저장소로 자동 동기화됩니다.
+
+### Supabase (프로덕션 권장)
+
+클라우드 DB·인증·실시간 코트 동기화. 상세 체크리스트: **[docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md)**
+
+1. [supabase.com](https://supabase.com)에서 프로젝트 생성
+2. `supabase/migrations/` SQL 실행 + `avatars` 버킷 생성
+3. `.env`에 URL·anon key 설정 후 `npx expo start -c`
+
+```
+EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+```
+
+Supabase가 설정되면 로컬 sync-server는 사용하지 않습니다.
+
+## 데모 계정
+
+| 역할 | 학번 | 비밀번호 |
+|------|------|----------|
+| 회원 | 20240001 | dgist1234 |
+| 관리자 | 20230001 | dgist1234 |
+
 ## 프로젝트 구조
 
 ```

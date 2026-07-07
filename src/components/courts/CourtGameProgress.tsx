@@ -17,7 +17,7 @@ export function CourtGameProgress({ court, courtWidth }: CourtGameProgressProps)
   const barH = Math.max(2, courtWidth * 0.018);
 
   return (
-    <View style={[styles.track, { bottom, height: barH, borderRadius: barH / 2 }]} pointerEvents="none">
+    <View style={[styles.track, { bottom, height: barH, borderRadius: barH / 2, pointerEvents: 'none' }]}>
       <View
         style={[
           styles.fill,

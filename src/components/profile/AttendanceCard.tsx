@@ -3,7 +3,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useAuthStore } from '@/src/stores/authStore';
 import { useAppStore } from '@/src/stores/authStore';
 import { useNotificationStore } from '@/src/stores/notificationStore';
+import { useGeoLocation } from '@/src/hooks/useGeoLocation';
 import { Button } from '@/src/components/ui/Button';
+import { getDistanceToGym } from '@/src/services/geoFence';
+import { GYM_LOCATION } from '@/src/constants';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
 
 function todayKey() {
@@ -11,10 +14,13 @@ function todayKey() {
 }
 
 export function AttendanceCard() {
+  useGeoLocation();
   const currentUser = useAuthStore((s) => s.currentUser);
   const attendanceRecords = useAuthStore((s) => s.attendanceRecords);
   const checkIn = useAuthStore((s) => s.checkIn);
-  const isAtGym = useAppStore((s) => s.isAtGym);
+  const location = useAppStore((s) => s.location);
+  const locationError = useAppStore((s) => s.locationError);
+  const demoMode = useAppStore((s) => s.demoMode);
   const checkGeoFence = useAppStore((s) => s.checkGeoFence);
   const showToast = useNotificationStore((s) => s.showToast);
 
@@ -25,18 +31,23 @@ export function AttendanceCard() {
     (r) => r.userId === currentUser.id && r.date === today
   );
 
+  const isAdmin = currentUser.membershipTier === 'admin';
+  const distance = location ? getDistanceToGym(location) : null;
+  const canCheckIn = checkGeoFence();
+
+  const statusText = (() => {
+    if (demoMode) return '데모 모드 · 위치 제한 없이 출석할 수 있어요.';
+    if (isAdmin) return '운영진 · 위치 제한 없이 출석할 수 있어요.';
+    if (locationError) return locationError;
+    if (distance === null) return '위치를 확인하는 중이에요…';
+    if (canCheckIn) return `S1 체육관 반경 안이에요 (약 ${distance}m). 출석할 수 있어요.`;
+    return `체육관에서 약 ${distance}m 떨어져 있어요. 반경 ${GYM_LOCATION.radiusMeters}m 안으로 이동해 주세요.`;
+  })();
+
   const handleCheckIn = () => {
-    if (!checkGeoFence()) {
-      showToast({
-        type: 'warning',
-        title: '',
-        message: 'S1 체육관 근처에서만 출석할 수 있어요.',
-      });
-      return;
-    }
     const result = checkIn(currentUser.id);
     showToast({
-      type: result.success ? 'success' : 'info',
+      type: result.success ? 'success' : 'warning',
       title: '',
       message: result.message,
     });
@@ -46,13 +57,9 @@ export function AttendanceCard() {
     <View style={styles.card}>
       <View style={styles.header}>
         <Text style={styles.title}>출석</Text>
-        <View style={[styles.locDot, isAtGym && styles.locDotOn]} />
+        <View style={[styles.locDot, canCheckIn && styles.locDotOn]} />
       </View>
-      <Text style={styles.desc}>
-        {isAtGym
-          ? 'S1 체육관 근처입니다. 출석할 수 있어요.'
-          : 'S1 체육관 근처로 이동하면 출석할 수 있어요.'}
-      </Text>
+      <Text style={styles.desc}>{statusText}</Text>
       {todayRecord ? (
         <View style={styles.doneBox}>
           <Text style={styles.doneText}>✓ 오늘 출석 완료</Text>
@@ -65,9 +72,9 @@ export function AttendanceCard() {
         </View>
       ) : (
         <Button
-          title="출석하기"
+          title={canCheckIn ? '출석하기' : '체육관 근처에서 출석 가능'}
           onPress={handleCheckIn}
-          disabled={!isAtGym}
+          disabled={!canCheckIn}
           fullWidth
           variant="primary"
         />

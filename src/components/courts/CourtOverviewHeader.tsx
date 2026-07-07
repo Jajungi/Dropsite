@@ -30,7 +30,7 @@ export function CourtOverviewHeader({
   remaining,
   isExpanded = false,
 }: CourtOverviewHeaderProps) {
-  const { isMobile } = useLayoutMode();
+  const { isMobile, scaledTypography, isCompact } = useLayoutMode();
   const emptyCount = courts.filter((c) => c.status === 'empty').length;
   const reservedCount = courts.filter((c) => c.status === 'reserved').length;
   const playingCount = courts.filter((c) => c.status === 'playing').length;
@@ -49,14 +49,44 @@ export function CourtOverviewHeader({
       <View style={[styles.headerRow, isMobile && styles.headerRowMobile]}>
         <View style={styles.titleRow}>
           <View>
-            <Text style={[styles.title, isMobile && styles.titleMobile]}>코트 현황</Text>
+            <Text
+              style={[
+                styles.title,
+                isMobile && styles.titleMobile,
+                isMobile && {
+                  fontSize: scaledTypography.h1.fontSize,
+                  lineHeight: scaledTypography.h1.lineHeight,
+                },
+              ]}
+            >
+              코트 현황
+            </Text>
             {!isExpanded && (
-              <Text style={[styles.venueSub, isMobile && styles.venueSubMobile]}>{GYM_VENUE.name}</Text>
+              <Text
+                style={[
+                  styles.venueSub,
+                  isMobile && styles.venueSubMobile,
+                  isCompact && { fontSize: scaledTypography.small.fontSize },
+                ]}
+              >
+                {GYM_VENUE.name}
+              </Text>
             )}
           </View>
           <CourtStatusInfoModal compact />
         </View>
-        <Text style={[styles.time, isMobile && styles.timeMobile]}>{formatDate()}</Text>
+        <Text
+          style={[
+            styles.time,
+            isMobile && styles.timeMobile,
+            isMobile && {
+              fontSize: scaledTypography.h2.fontSize,
+              lineHeight: scaledTypography.h2.lineHeight,
+            },
+          ]}
+        >
+          {formatDate()}
+        </Text>
       </View>
 
       {!isExpanded && (
@@ -82,7 +112,13 @@ export function CourtOverviewHeader({
                 accessibilityRole="button"
                 accessibilityLabel={`${f.label} ${f.count}`}
               >
-                <Text style={[styles.viewBtnText, filter === f.key && styles.viewBtnTextActive]}>
+                <Text
+                  style={[
+                    styles.viewBtnText,
+                    filter === f.key && styles.viewBtnTextActive,
+                    isCompact && { fontSize: 11 },
+                  ]}
+                >
                   {f.label}
                 </Text>
               </Pressable>

@@ -4,7 +4,16 @@ import { MOCK_TEAM_ROOMS } from '@/src/services/mockData';
 import { isRankEligible } from '@/src/services/elo';
 import type { RankTier } from '@/src/types';
 import { saveRooms } from '@/src/services/persistence';
+import { isSupabaseEnabled } from '@/src/lib/supabase';
 import { useAuthStore } from './authStore';
+import { isGuestUser } from '@/src/utils/guestAccess';
+
+function remoteRoom(fn: (m: typeof import('@/src/services/supabase/social')) => Promise<unknown>) {
+  if (!isSupabaseEnabled()) return;
+  import('@/src/services/supabase/social')
+    .then(fn)
+    .catch((err) => console.warn('[lobby] sync failed', err));
+}
 
 interface LobbyState {
   rooms: TeamRoom[];
@@ -39,6 +48,10 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   hydrateRooms: (rooms) => set({ rooms }),
 
   createRoom: (params) => {
+    const host = useAuthStore.getState().users.find((u) => u.id === params.hostId);
+    if (isGuestUser(host)) {
+      return { success: false, message: '게스트는 모집방을 만들 수 없어요. 회원가입 후 이용해 주세요.' };
+    }
     const memberCheck = useAuthStore.getState().canPerformMemberAction(params.hostId);
     if (!memberCheck.allowed) {
       return { success: false, message: memberCheck.reason ?? '모집방을 만들 수 없어요.' };
@@ -67,6 +80,20 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     const rooms = [newRoom, ...get().rooms];
     set({ rooms });
     persistRooms(rooms);
+
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/social')
+        .then(({ insertTeamRoomRemote }) =>
+          insertTeamRoomRemote(newRoom).then((remoteId) => {
+            if (!remoteId) return;
+            set((state) => ({
+              rooms: state.rooms.map((r) => (r.id === newRoom.id ? { ...r, id: remoteId } : r)),
+            }));
+          })
+        )
+        .catch((err) => console.warn('[lobby] create failed', err));
+    }
+
     return { success: true, message: '모집방이 생성되었어요.' };
   },
 
@@ -97,6 +124,12 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     });
     set({ rooms });
     persistRooms(rooms);
+    const updated = rooms.find((r) => r.id === roomId);
+    if (updated) {
+      remoteRoom((m) =>
+        m.updateTeamRoomRemote(roomId, { members: updated.members, status: updated.status })
+      );
+    }
     return { success: true, message: '방에 참여했어요!' };
   },
 
@@ -118,6 +151,20 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
       .filter(Boolean) as TeamRoom[];
     set({ rooms });
     persistRooms(rooms);
+
+    const remaining = rooms.find((r) => r.id === roomId);
+    if (!remaining) {
+      remoteRoom((m) => m.deleteTeamRoomRemote(roomId));
+    } else {
+      remoteRoom((m) =>
+        m.updateTeamRoomRemote(roomId, {
+          members: remaining.members,
+          status: remaining.status,
+          hostId: remaining.hostId,
+          hostName: remaining.hostName,
+        })
+      );
+    }
   },
 
   markRoomReserved: (roomId, _courtId) => {
@@ -126,6 +173,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     );
     set({ rooms });
     persistRooms(rooms);
+    remoteRoom((m) => m.updateTeamRoomRemote(roomId, { status: 'reserved' }));
   },
 
   adminCloseRoom: (roomId) => {
@@ -134,6 +182,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     const rooms = get().rooms.filter((r) => r.id !== roomId);
     set({ rooms });
     persistRooms(rooms);
+    remoteRoom((m) => m.deleteTeamRoomRemote(roomId));
     return { success: true, message: `「${room.title}」 모집방을 종료했어요.` };
   },
 }));

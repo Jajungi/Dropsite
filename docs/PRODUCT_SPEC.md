@@ -184,11 +184,21 @@ others      = checkedIn && !friend && id !== me  // 친구 섹션 아래
 
 ---
 
-## 9. 백엔드 연동 시 (⬜)
+## 9. 백엔드·동기화
 
-- [ ] WebSocket: 친구 온라인·코트 상태 실시간
-- [ ] REST: 출석·일정·친구 관계 영속화
-- [ ] 푸시: 합류 요청·코치 호출
+| 기능 | 상태 | 비고 |
+|------|------|------|
+| 같은 브라우저 탭 간 동기화 | ✅ | `crossTabSync` |
+| 개발용 동기화 서버 (REST + WS) | ✅ | `npm run server`, `EXPO_PUBLIC_SYNC_URL` |
+| **Supabase 마이그레이션** | 🟡 진행 중 | `docs/SUPABASE_MIGRATION.md` — Auth·RLS·Realtime·Storage |
+| 프로덕션 REST API | ⬜ | Supabase RPC로 대체 예정 |
+| 푸시 알림 (합류·코치) | ⬜ | `expo-notifications` + 서버 |
+
+### 동기화 서버
+
+- `GET/PUT /api/sync` — 앱 상태·코트·모집방 일괄 동기화
+- `WS /ws` — 변경 시 모든 클라이언트에 broadcast
+- 데이터: `server/data.json` (개발용, gitignore)
 
 ---
 
@@ -196,5 +206,7 @@ others      = checkedIn && !friend && id !== me  // 친구 섹션 아래
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-07-07 | Supabase 마이그레이션 설계·스키마·Auth/코트/아바타 연동 |
+| 2026-07-07 | 포인트 정책·관리자 운영/포인트 탭·동기화 서버 |
 | 2026-07-07 | 코치 레슨 신청·승인·대기열·코치코트 제한 |
 | 2026-07-07 | 친구 화면 분리, PRODUCT_SPEC 최초 작성 |

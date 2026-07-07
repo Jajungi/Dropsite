@@ -59,9 +59,9 @@ export function CourtIllustration({ court, width, borderRadius: radius = 0 }: Co
   /** 카드 외곽 림 페더 */
   const rimFade = Math.max(6, width * 0.055);
   const rimOpacity = 0.14;
-  /** 모서리 라운드 페더 */
-  const cornerSoft = Math.max(radius * 1.6, width * 0.1);
-  const cornerOpacity = isEmpty ? 0.16 : 0.11;
+  /** 모서리 페더 — 직각 카드라 아주 은은하게만 */
+  const cornerSoft = width * 0.07;
+  const cornerOpacity = isEmpty ? 0.09 : 0.06;
   const hasMode = court.gameMode && court.status !== 'empty';
   const isNanta = court.gameMode === 'nanta' && court.nantaHalf && court.status !== 'empty';
   const nantaHalf = normalizeNantaHalf(court.nantaHalf);
@@ -183,34 +183,64 @@ export function CourtIllustration({ court, width, borderRadius: radius = 0 }: Co
           </RadialGradient>
 
           {isLit && (
-            <RadialGradient
-              id={`venue-${gradId}`}
-              cx={width * 0.5}
-              cy={height * 0.08}
-              rx={width * 0.7}
-              ry={height * 0.55}
-              fx={width * 0.5}
-              fy={0}
-              gradientUnits="userSpaceOnUse"
-            >
-              <Stop offset="0%" stopColor={COURT_VENUE_LIGHT} stopOpacity={0.85} />
-              <Stop offset="55%" stopColor={COURT_VENUE_LIGHT} stopOpacity={0.25} />
-              <Stop offset="100%" stopColor="#000000" stopOpacity={0} />
-            </RadialGradient>
+            <>
+              {/* 천장에서 부드럽게 내려오는 확산광 (세로 그라디언트) */}
+              <LinearGradient id={`lit-wash-${gradId}`} x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor={COURT_VENUE_LIGHT} stopOpacity={0.5} />
+                <Stop offset="20%" stopColor={COURT_VENUE_LIGHT} stopOpacity={0.28} />
+                <Stop offset="48%" stopColor={COURT_VENUE_LIGHT} stopOpacity={0.1} />
+                <Stop offset="100%" stopColor={COURT_VENUE_LIGHT} stopOpacity={0} />
+              </LinearGradient>
+              {/* 램프 아래로 번지는 빛 웅덩이 — 다단계로 자연스럽게 감쇠 */}
+              <RadialGradient
+                id={`lit-pool-l-${gradId}`}
+                cx={width * 0.34}
+                cy={2}
+                rx={width * 0.4}
+                ry={height * 0.66}
+                gradientUnits="userSpaceOnUse"
+              >
+                <Stop offset="0%" stopColor="#FFFDF0" stopOpacity={0.24} />
+                <Stop offset="30%" stopColor="#FFFDF0" stopOpacity={0.12} />
+                <Stop offset="62%" stopColor="#FFFDF0" stopOpacity={0.035} />
+                <Stop offset="100%" stopColor="#FFFDF0" stopOpacity={0} />
+              </RadialGradient>
+              <RadialGradient
+                id={`lit-pool-r-${gradId}`}
+                cx={width * 0.66}
+                cy={2}
+                rx={width * 0.4}
+                ry={height * 0.66}
+                gradientUnits="userSpaceOnUse"
+              >
+                <Stop offset="0%" stopColor="#FFFDF0" stopOpacity={0.24} />
+                <Stop offset="30%" stopColor="#FFFDF0" stopOpacity={0.12} />
+                <Stop offset="62%" stopColor="#FFFDF0" stopOpacity={0.035} />
+                <Stop offset="100%" stopColor="#FFFDF0" stopOpacity={0} />
+              </RadialGradient>
+            </>
           )}
 
           {isReserved && (
-            <RadialGradient
-              id={`reserve-${gradId}`}
-              cx={width * 0.5}
-              cy={height * 0.35}
-              rx={width * 0.65}
-              ry={height * 0.5}
-              gradientUnits="userSpaceOnUse"
-            >
-              <Stop offset="0%" stopColor="rgba(255, 230, 160, 0.55)" stopOpacity={1} />
-              <Stop offset="100%" stopColor="#000000" stopOpacity={0} />
-            </RadialGradient>
+            <>
+              <LinearGradient id={`reserve-wash-${gradId}`} x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor="#FFE6A0" stopOpacity={0.4} />
+                <Stop offset="35%" stopColor="#FFE6A0" stopOpacity={0.16} />
+                <Stop offset="100%" stopColor="#FFE6A0" stopOpacity={0} />
+              </LinearGradient>
+              <RadialGradient
+                id={`reserve-pool-${gradId}`}
+                cx={width * 0.5}
+                cy={2}
+                rx={width * 0.5}
+                ry={height * 0.62}
+                gradientUnits="userSpaceOnUse"
+              >
+                <Stop offset="0%" stopColor="#FFE6A0" stopOpacity={0.3} />
+                <Stop offset="42%" stopColor="#FFE6A0" stopOpacity={0.12} />
+                <Stop offset="100%" stopColor="#FFE6A0" stopOpacity={0} />
+              </RadialGradient>
+            </>
           )}
         </Defs>
 
@@ -228,14 +258,21 @@ export function CourtIllustration({ court, width, borderRadius: radius = 0 }: Co
         <Rect x={bx * 0.35} y={by + bh * 0.38} width={benchW} height={benchH} rx={1} fill="rgba(0,0,0,0.18)" opacity={lineOpacity} />
         <Rect x={width - bx * 0.35 - benchW} y={by + bh * 0.38} width={benchW} height={benchH} rx={1} fill="rgba(0,0,0,0.18)" opacity={lineOpacity} />
 
-        {/* 천장 조명 (경기 중) */}
+        {/* 경기 중 — 천장 확산광 + 번지는 빛 웅덩이 */}
         {isLit && (
-          <Rect x={0} y={0} width={width} height={height} rx={radius} ry={radius} fill={`url(#venue-${gradId})`} />
+          <>
+            <Rect x={0} y={0} width={width} height={height} rx={radius} ry={radius} fill={`url(#lit-wash-${gradId})`} />
+            <Rect x={0} y={0} width={width} height={height} fill={`url(#lit-pool-l-${gradId})`} />
+            <Rect x={0} y={0} width={width} height={height} fill={`url(#lit-pool-r-${gradId})`} />
+          </>
         )}
 
-        {/* 예약됨 — 대기 조명 */}
+        {/* 예약됨 — 은은한 대기 조명 */}
         {isReserved && (
-          <Rect x={0} y={0} width={width} height={height} rx={radius} ry={radius} fill={`url(#reserve-${gradId})`} />
+          <>
+            <Rect x={0} y={0} width={width} height={height} rx={radius} ry={radius} fill={`url(#reserve-wash-${gradId})`} />
+            <Rect x={0} y={0} width={width} height={height} fill={`url(#reserve-pool-${gradId})`} />
+          </>
         )}
 
         {/* 정리 중 — 빗자국 패턴 */}
@@ -491,19 +528,23 @@ export function CourtIllustration({ court, width, borderRadius: radius = 0 }: Co
         {/* 가장자리 비네팅 (아주 약하게) */}
         <Rect x={0} y={0} width={width} height={height} rx={radius} ry={radius} fill={`url(#vignette-${gradId})`} />
 
-        {/* 경기 중 천장 램프 + 조명 원뿔 */}
+        {/* 천장 램프 — 겹친 타원으로 부드러운 블룸(번짐) 표현 */}
         {isLit && (
           <>
-            <Ellipse cx={width * 0.35} cy={4} rx={5} ry={2} fill="rgba(220, 240, 190, 0.9)" />
-            <Ellipse cx={width * 0.65} cy={4} rx={5} ry={2} fill="rgba(220, 240, 190, 0.9)" />
-            <Ellipse cx={width * 0.35} cy={by + bh * 0.35} rx={bw * 0.22} ry={bh * 0.28} fill="rgba(255,255,255,0.04)" />
-            <Ellipse cx={width * 0.65} cy={by + bh * 0.35} rx={bw * 0.22} ry={bh * 0.28} fill="rgba(255,255,255,0.04)" />
+            <Ellipse cx={width * 0.34} cy={4} rx={13} ry={6} fill="#F4FBDC" opacity={0.16} />
+            <Ellipse cx={width * 0.34} cy={4} rx={8} ry={3.4} fill="#F8FCE4" opacity={0.42} />
+            <Ellipse cx={width * 0.34} cy={4} rx={4.4} ry={1.7} fill="rgba(255,255,248,0.95)" />
+            <Ellipse cx={width * 0.66} cy={4} rx={13} ry={6} fill="#F4FBDC" opacity={0.16} />
+            <Ellipse cx={width * 0.66} cy={4} rx={8} ry={3.4} fill="#F8FCE4" opacity={0.42} />
+            <Ellipse cx={width * 0.66} cy={4} rx={4.4} ry={1.7} fill="rgba(255,255,248,0.95)" />
           </>
         )}
 
         {isReserved && (
           <>
-            <Ellipse cx={width * 0.5} cy={5} rx={4} ry={1.5} fill="rgba(255, 220, 150, 0.75)" />
+            <Ellipse cx={width * 0.5} cy={5} rx={11} ry={5} fill="#FFE0A0" opacity={0.16} />
+            <Ellipse cx={width * 0.5} cy={5} rx={6} ry={2.4} fill="#FFE8B4" opacity={0.42} />
+            <Ellipse cx={width * 0.5} cy={5} rx={3.4} ry={1.3} fill="rgba(255,245,220,0.92)" />
           </>
         )}
       </Svg>

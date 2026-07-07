@@ -12,18 +12,39 @@ interface PageContainerProps {
 
 /** Portfolio 스타일 흰색 라운드 패널 */
 export function PageContainer({ children, style, flush }: PageContainerProps) {
-  const { isDesktop } = useLayoutMode();
+  const { isDesktop, scaledSpacing } = useLayoutMode();
 
   return (
     <View
       style={[
         styles.outer,
-        isDesktop ? styles.outerDesktop : styles.outerMobile,
-        flush && !isDesktop && styles.outerMobileFlush,
+        isDesktop ? styles.outerDesktop : [styles.outerMobile, { paddingHorizontal: scaledSpacing.xs }],
+        flush && !isDesktop && [styles.outerMobileFlush, { paddingHorizontal: scaledSpacing.xs }],
         style,
       ]}
     >
-      <View style={[styles.panel, flush && (isDesktop ? styles.panelFlush : styles.panelFlushMobile)]}>
+      <View
+        style={[
+          styles.panel,
+          flush &&
+            (isDesktop
+              ? styles.panelFlush
+              : [
+                  styles.panelFlushMobile,
+                  {
+                    paddingTop: scaledSpacing.sm,
+                    paddingHorizontal: scaledSpacing.sm,
+                    paddingBottom: scaledSpacing.xs,
+                  },
+                ]),
+          !flush &&
+            !isDesktop && {
+              paddingTop: scaledSpacing.lg,
+              paddingHorizontal: scaledSpacing.lg,
+              paddingBottom: scaledSpacing.sm,
+            },
+        ]}
+      >
         {children}
       </View>
     </View>

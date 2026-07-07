@@ -34,6 +34,7 @@ export default function LobbyScreen() {
   const courts = useCourtStore((s) => s.courts);
   const reserveCourtForTeam = useCourtStore((s) => s.reserveCourtForTeam);
   const currentUser = useAuthStore((s) => s.currentUser);
+  const isGuest = useAuthStore((s) => s.isGuestSession);
   const checkGeoFence = useAppStore((s) => s.checkGeoFence);
   const showToast = useNotificationStore((s) => s.showToast);
 
@@ -154,8 +155,14 @@ export default function LobbyScreen() {
       <PageContainer>
         <View style={[styles.header, isDesktop && styles.headerDesktop]}>
           <Text style={[styles.title, isDesktop && styles.titleDesktop]}>파트너 모집</Text>
-          <Button title="방 만들기" onPress={() => setShowCreate(true)} size="sm" />
+          {!isGuest && (
+            <Button title="방 만들기" onPress={() => setShowCreate(true)} size="sm" />
+          )}
         </View>
+
+        {isGuest && (
+          <Text style={styles.guestHint}>게스트는 모집방 참여만 가능해요. 방 만들기는 회원 전용입니다.</Text>
+        )}
 
         <ActivityNoticeBanner />
 
@@ -271,6 +278,12 @@ const styles = StyleSheet.create({
   headerDesktop: { paddingTop: spacing.xl, paddingBottom: spacing.lg },
   title: { ...typography.h1, color: colors.text, fontSize: 28 },
   titleDesktop: { ...typography.h1, color: colors.text },
+  guestHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
   content: { paddingBottom: spacing.xxl },
   sectionTitle: {
     ...typography.label,

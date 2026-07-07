@@ -30,6 +30,7 @@ export default function CourtsScreen() {
   const startGame = useCourtStore((s) => s.startGame);
   const completeGame = useCourtStore((s) => s.completeGame);
   const returnCourt = useCourtStore((s) => s.returnCourt);
+  const cancelReservation = useCourtStore((s) => s.cancelReservation);
   const requestJoin = useCourtStore((s) => s.requestJoin);
   const acceptJoin = useCourtStore((s) => s.acceptJoin);
   const rejectJoin = useCourtStore((s) => s.rejectJoin);
@@ -112,6 +113,12 @@ export default function CourtsScreen() {
       setShowScoreSheet(false);
       showToast({ type: 'info', title: '', message: '코트가 반납되었어요.' });
       handleClose();
+    },
+    onCancelReservation: () => {
+      if (!currentUser || !selectedCourt) return;
+      const result = cancelReservation(selectedCourt.id, currentUser.id);
+      showToast({ type: result.success ? 'info' : 'warning', title: '', message: result.message });
+      if (result.success) handleClose();
     },
     onStartGame: () => {
       if (!selectedCourt) return;
