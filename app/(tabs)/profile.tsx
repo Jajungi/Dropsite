@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Platform } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore, useAppStore } from '@/src/stores/authStore';
@@ -14,7 +14,8 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { EloChart } from '@/src/components/profile/EloChart';
 import { HourlyHeadcountChart } from '@/src/components/profile/HourlyHeadcountChart';
-import { MatchHistoryList } from '@/src/components/profile/MatchHistoryList';
+import { MatchHistorySheet } from '@/src/components/profile/MatchHistorySheet';
+import { EloRankingSheet } from '@/src/components/profile/EloRankingSheet';
 import { AttendanceCard } from '@/src/components/profile/AttendanceCard';
 import { LessonApplyCard } from '@/src/components/profile/LessonApplyCard';
 import { PointsHistorySheet } from '@/src/components/profile/PointsHistorySheet';
@@ -28,6 +29,7 @@ import { colors, spacing, typography, borderRadius, shadows, glass } from '@/src
 export default function ProfileScreen() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const logout = useAuthStore((s) => s.logout);
+  const deleteMyAccount = useAuthStore((s) => s.deleteMyAccount);
   const updateUserProfile = useAuthStore((s) => s.updateUserProfile);
   const checkGeoFence = useAppStore((s) => s.checkGeoFence);
   const cleaningLeaderboard = useNotificationStore((s) => s.cleaningLeaderboard);
@@ -43,6 +45,8 @@ export default function ProfileScreen() {
   const [showCleaning, setShowCleaning] = useState(false);
   const [showNetSetup, setShowNetSetup] = useState(false);
   const [showPointsHistory, setShowPointsHistory] = useState(false);
+  const [showMatchHistory, setShowMatchHistory] = useState(false);
+  const [showRanking, setShowRanking] = useState(false);
   const [selectedArea, setSelectedArea] = useState(CLEANING_AREAS[0]);
   const [selectedNetArea, setSelectedNetArea] = useState<string>(NET_SETUP_AREAS[0]);
   const [showCockCarry, setShowCockCarry] = useState(false);
@@ -235,10 +239,19 @@ export default function ProfileScreen() {
         </View>
 
         <View style={[styles.statsGrid, isMobile && styles.statsGridMobile]}>
-          <Card style={[styles.statCard, isMobile && styles.statCardMobile]}>
+          <Pressable
+            onPress={() => setShowRanking(true)}
+            style={({ pressed }) => [
+              styles.statCard,
+              isMobile && styles.statCardMobile,
+              styles.statCardPressable,
+              pressed && styles.statCardPressed,
+            ]}
+          >
             <Text style={[styles.statValue, isMobile && statValueMobile(scaledTypography)]}>{currentUser.elo}</Text>
             <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>Elo</Text>
-          </Card>
+            <Text style={styles.statHint}>순위표 보기</Text>
+          </Pressable>
           <Card style={[styles.statCard, isMobile && styles.statCardMobile]}>
             <Text style={[styles.statValue, isMobile && statValueMobile(scaledTypography)]}>{hasGameStats ? `${winRate}%` : '—'}</Text>
             <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>승률</Text>
@@ -256,10 +269,19 @@ export default function ProfileScreen() {
             <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>포인트</Text>
             <Text style={styles.statHint}>내역 보기</Text>
           </Pressable>
-          <Card style={[styles.statCard, isMobile && styles.statCardMobile]}>
+          <Pressable
+            onPress={() => setShowMatchHistory(true)}
+            style={({ pressed }) => [
+              styles.statCard,
+              isMobile && styles.statCardMobile,
+              styles.statCardPressable,
+              pressed && styles.statCardPressed,
+            ]}
+          >
             <Text style={[styles.statValue, isMobile && statValueMobile(scaledTypography)]}>{currentUser.totalGames}</Text>
             <Text style={[styles.statLabel, isMobile && styles.statLabelMobile]}>총 게임</Text>
-          </Card>
+            <Text style={styles.statHint}>전적 보기</Text>
+          </Pressable>
         </View>
 
         <Card style={styles.section}>
@@ -275,18 +297,14 @@ export default function ProfileScreen() {
           <LessonApplyCard />
         </Card>
 
-        <Card style={styles.section}>
-          <Text style={styles.sectionTitle}>전적</Text>
-          <MatchHistoryList userId={currentUser.id} />
-        </Card>
-
-        <Card style={styles.section}>
-          <EloChart data={[]} />
-        </Card>
-
-        <Card style={styles.section}>
-          <HourlyHeadcountChart />
-        </Card>
+        <View style={[styles.chartsRow, isNarrow && styles.chartsCol]}>
+          <Card style={[styles.section, styles.chartCard]}>
+            <EloChart data={[]} height={280} />
+          </Card>
+          <Card style={[styles.section, styles.chartCard]}>
+            <HourlyHeadcountChart cellHeight={48} />
+          </Card>
+        </View>
 
         <Card style={styles.section}>
           <Text style={styles.sectionTitle}>🧹 봉사 · 소모품</Text>
@@ -342,6 +360,38 @@ export default function ProfileScreen() {
           variant="ghost"
           style={{ marginTop: spacing.md }}
         />
+        <Pressable
+          onPress={() => {
+            Alert.alert(
+              '계정 삭제',
+              '계정을 삭제하면 전적·포인트 기록이 사라지고, 같은 학번으로 다시 가입할 수 있어요. 계속할까요?',
+              [
+                { text: '취소', style: 'cancel' },
+                {
+                  text: '삭제',
+                  style: 'destructive',
+                  onPress: () => {
+                    void (async () => {
+                      const result = await deleteMyAccount();
+                      showToast({
+                        type: result.success ? 'info' : 'warning',
+                        title: '',
+                        message: result.message,
+                      });
+                      if (result.success) {
+                        router.replace('/login');
+                      }
+                    })();
+                  },
+                },
+              ]
+            );
+          }}
+          style={styles.deleteAccountBtn}
+          accessibilityRole="button"
+        >
+          <Text style={styles.deleteAccountText}>계정 삭제</Text>
+        </Pressable>
       </ScrollView>
       </PageContainer>
 
@@ -351,6 +401,25 @@ export default function ProfileScreen() {
           userId={currentUser.id}
           balance={currentUser.points}
           onClose={() => setShowPointsHistory(false)}
+        />
+      )}
+
+      {showMatchHistory && (
+        <MatchHistorySheet
+          visible={showMatchHistory}
+          userId={currentUser.id}
+          totalGames={currentUser.totalGames}
+          wins={currentUser.wins}
+          losses={currentUser.losses}
+          onClose={() => setShowMatchHistory(false)}
+        />
+      )}
+
+      {showRanking && (
+        <EloRankingSheet
+          visible={showRanking}
+          currentUserId={currentUser.id}
+          onClose={() => setShowRanking(false)}
         />
       )}
 
@@ -466,6 +535,17 @@ const styles = StyleSheet.create({
   content: { padding: spacing.md, paddingBottom: spacing.xxl },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { ...typography.body, color: colors.textMuted },
+  deleteAccountBtn: {
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  deleteAccountText: {
+    ...typography.small,
+    color: colors.textMuted,
+    textDecorationLine: 'underline',
+  },
   profileHeader: {
     flexDirection: 'row',
     gap: spacing.lg,
@@ -519,6 +599,9 @@ const styles = StyleSheet.create({
   statLabel: { ...typography.label, color: colors.textMuted, marginTop: spacing.xs, textTransform: 'none' },
   statLabelMobile: { fontSize: 11, marginTop: 2 },
   section: { marginBottom: spacing.lg },
+  chartsRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'stretch' },
+  chartsCol: { flexDirection: 'column', gap: 0 },
+  chartCard: { flex: 1, minWidth: 0 },
   sectionTitle: { ...typography.bodyBold, color: colors.text, marginBottom: spacing.md, fontSize: 16 },
   sectionHint: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.sm },
   serviceActions: { gap: spacing.sm, marginTop: spacing.md },

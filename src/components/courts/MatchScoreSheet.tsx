@@ -10,6 +10,8 @@ interface MatchScoreSheetProps {
   players: CourtPlayer[];
   onSubmit: (scoreA: number, scoreB: number) => void;
   onClose: () => void;
+  /** Elo 반영 대상 경기 여부 (난타=false) */
+  rated?: boolean;
 }
 
 function splitTeams(players: CourtPlayer[]) {
@@ -26,6 +28,7 @@ export function MatchScoreSheet({
   players,
   onSubmit,
   onClose,
+  rated = true,
 }: MatchScoreSheetProps) {
   const { teamA, teamB } = splitTeams(players);
   const [scoreA, setScoreA] = useState('21');
@@ -49,7 +52,11 @@ export function MatchScoreSheet({
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <Text style={styles.title}>{courtId}번 코트 · 경기 결과</Text>
-          <Text style={styles.subtitle}>관리자 승인 후 Elo·포인트가 반영됩니다</Text>
+          <Text style={styles.subtitle}>
+            {rated
+              ? '점수를 입력하면 Elo·포인트가 바로 반영돼요'
+              : '난타는 친선경기라 Elo가 변동하지 않아요'}
+          </Text>
 
           <View style={styles.teams}>
             <View style={styles.teamCol}>
@@ -110,7 +117,14 @@ export function MatchScoreSheet({
           </View>
 
           <Button title="결과 제출" onPress={handleSubmit} fullWidth size="lg" disabled={!valid} />
-          <Button title="나중에" onPress={onClose} fullWidth size="md" variant="ghost" style={{ marginTop: spacing.sm }} />
+          <Button
+            title={rated ? '점수 없이 닫기 (친선경기)' : '닫기'}
+            onPress={onClose}
+            fullWidth
+            size="md"
+            variant="ghost"
+            style={{ marginTop: spacing.sm }}
+          />
         </Pressable>
       </Pressable>
     </Modal>

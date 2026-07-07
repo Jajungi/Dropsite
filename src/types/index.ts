@@ -7,7 +7,11 @@ export type RankTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | '
 
 export type CourtStatus = 'empty' | 'reserved' | 'playing' | 'just_finished';
 
-/** 난타 / 일반 경기 / 랭크전 */
+/**
+ * 난타(친선·반코트 연습) / 경기(casual).
+ * 'ranked'는 '경기'로 통합되어 더 이상 새로 생성되지 않지만, 과거 데이터 호환을 위해 유지.
+ * 경기 점수를 입력하면 Elo가 변동하고, 입력하지 않으면 친선경기로 유지됨.
+ */
 export type GameMode = 'nanta' | 'casual' | 'ranked';
 
 /** 난타 시 사용 구역 — 네트 가로 기준 상·하 반 (전체 폭, 네트 중심) */
@@ -36,6 +40,8 @@ export interface User {
   scheduledEnd?: string;
   lessonStatus: LessonAccessStatus;
   lessonRequestedAt?: string;
+  /** 코치 공지 작성 권한 (관리자가 부여) */
+  isCoach?: boolean;
   avatarColor: string;
   avatarUri?: string;
   createdAt: string;
@@ -219,6 +225,7 @@ export type PointTransactionType =
   | 'check_in'
   | 'court_reserve'
   | 'match_win'
+  | 'match_loss'
   | 'cleaning'
   | 'net_setup'
   | 'club_fee'

@@ -1,82 +1,14 @@
 -- ============================================================
--- 011: 관리자 DB 리셋 RPC (재실행 안전)
--- 앱 관리자 탭 → 시스템 에서 호출
--- 실행: Supabase SQL Editor 에 전체 붙여넣고 Run
--- ※ 014_db_safety_hardening.sql 이 있으면 그 파일만 실행해도 됩니다 (이 파일 포함).
+-- 014: DB 안전성 통합 패치 (재실행 안전)
+-- Supabase "UPDATE requires a WHERE clause" / 계정 삭제 FK 오류 방지
+--
+-- 아래 중 하나만 실행하면 됩니다 (권장: 이 파일만):
+--   supabase/014_db_safety_hardening.sql
+--
+-- 포함: _admin_clear_user_refs, 관리자 리셋 RPC, 계정 삭제 RPC
 -- ============================================================
 
--- 코트 상태 초기화 (내부 헬퍼)
-create or replace function public._admin_reset_courts()
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  perform set_config('app.allow_court_write', 'on', true);
-  update public.courts set
-    status          = 'empty',
-    players         = '[]'::jsonb,
-    join_requests   = '[]'::jsonb,
-    games_completed = 0,
-    reserved_by     = null,
-    reserved_at     = null,
-    started_at      = null,
-    finished_at     = null,
-    game_mode       = null,
-    nanta_half      = null,
-    updated_at      = now()
-  where id is not null;
-end;
-$$;
-
--- 회원 통계 초기화 (내부 헬퍼)
-create or replace function public._admin_reset_member_stats()
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  perform set_config('app.allow_sensitive_profile_write', 'on', true);
-  update public.profiles set
-    elo                    = 1000,
-    rank                   = 'bronze',
-    points                 = 0,
-    wins                   = 0,
-    losses                 = 0,
-    total_games            = 0,
-    cleaning_contributions = 0,
-    peak_time_reservations = 0,
-    is_at_gym              = false,
-    schedule_date          = null,
-    scheduled_start        = null,
-    scheduled_end          = null,
-    lesson_status          = 'none',
-    lesson_requested_at    = null,
-    updated_at             = now()
-  where id is not null;
-end;
-$$;
-
--- 클럽 메타데이터 초기화 (내부 헬퍼)
-create or replace function public._admin_reset_club_metadata()
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  update public.club_metadata set
-    peak_reset_date           = null,
-    last_cleaning_bonus_month = null,
-    updated_at                = now()
-  where id = 1;
-end;
-$$;
-
--- 삭제 대상 회원을 참조하는 ON DELETE 미설정(RESTRICT) FK 정리 (내부 헬퍼)
--- profiles 를 cascade 삭제할 때 막히지 않도록 미리 null 처리
+-- 삭제 대상 회원을 참조하는 RESTRICT FK 정리 (공용 헬퍼)
 create or replace function public._admin_clear_user_refs(p_ids uuid[])
 returns void
 language plpgsql
@@ -114,7 +46,77 @@ begin
 end;
 $$;
 
--- 활동/거래 테이블 비우기 (내부 헬퍼)
+-- 코트 상태 초기화
+create or replace function public._admin_reset_courts()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform set_config('app.allow_court_write', 'on', true);
+  update public.courts set
+    status          = 'empty',
+    players         = '[]'::jsonb,
+    join_requests   = '[]'::jsonb,
+    games_completed = 0,
+    reserved_by     = null,
+    reserved_at     = null,
+    started_at      = null,
+    finished_at     = null,
+    game_mode       = null,
+    nanta_half      = null,
+    updated_at      = now()
+  where id is not null;
+end;
+$$;
+
+-- 회원 통계 초기화
+create or replace function public._admin_reset_member_stats()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform set_config('app.allow_sensitive_profile_write', 'on', true);
+  update public.profiles set
+    elo                    = 1000,
+    rank                   = 'bronze',
+    points                 = 0,
+    wins                   = 0,
+    losses                 = 0,
+    total_games            = 0,
+    cleaning_contributions = 0,
+    peak_time_reservations = 0,
+    is_at_gym              = false,
+    schedule_date          = null,
+    scheduled_start        = null,
+    scheduled_end          = null,
+    lesson_status          = 'none',
+    lesson_requested_at    = null,
+    updated_at             = now()
+  where id is not null;
+end;
+$$;
+
+-- 클럽 메타데이터 초기화
+create or replace function public._admin_reset_club_metadata()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.club_metadata set
+    peak_reset_date           = null,
+    last_cleaning_bonus_month = null,
+    updated_at                = now()
+  where id = 1;
+end;
+$$;
+
+-- 활동/거래 테이블 비우기
 create or replace function public._admin_truncate_activity_tables()
 returns void
 language plpgsql
@@ -137,20 +139,7 @@ begin
 end;
 $$;
 
--- ---------------------------------------------------------------------------
--- rpc_admin_reset_data
---   p_scope:
---     full                — 모든 계정 + 모든 데이터 삭제
---     activity_stats      — 계정 유지, 통계·코트·활동 기록 전부 초기화
---     courts              — 코트 예약·경기 상태만 초기화
---     matches             — 경기 기록만 삭제
---     attendance          — 출석·청소 제출 기록만 삭제
---     points              — 포인트 거래내역 삭제 + 모든 포인트 0
---     social              — 친구·로비·코치공지·레슨대기 삭제
---     notifications_logs  — 알림·관리자 로그만 삭제
---     guests              — 게스트 계정만 삭제
---     pending_members     — 승인 대기 계정만 삭제
--- ---------------------------------------------------------------------------
+-- 관리자 DB 리셋 (앱 관리자 탭 → 시스템)
 create or replace function public.rpc_admin_reset_data(p_scope text)
 returns jsonb
 language plpgsql
@@ -222,7 +211,6 @@ begin
       perform public._admin_reset_courts();
       perform public._admin_truncate_activity_tables();
       perform public._admin_reset_club_metadata();
-      -- 남은 self-ref(club_fee_verified_by 등) 정리 후 전체 삭제
       select array_agg(id) into v_ids from public.profiles;
       perform public._admin_clear_user_refs(v_ids);
       delete from auth.users where id is not null;
@@ -242,3 +230,48 @@ $$;
 
 revoke all on function public.rpc_admin_reset_data(text) from public;
 grant execute on function public.rpc_admin_reset_data(text) to authenticated;
+
+-- 본인 또는 관리자 계정 삭제
+create or replace function public.rpc_delete_account(p_target_id uuid default null)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_target uuid := coalesce(p_target_id, v_actor);
+  v_tier public.membership_tier;
+  v_admin_count int;
+begin
+  if v_actor is null then
+    raise exception 'not authenticated';
+  end if;
+
+  if v_target <> v_actor and not public.is_admin() then
+    raise exception 'forbidden';
+  end if;
+
+  select membership_tier into v_tier
+  from public.profiles
+  where id = v_target;
+
+  if not found then
+    raise exception 'user not found';
+  end if;
+
+  if v_tier = 'admin' then
+    select count(*)::int into v_admin_count
+    from public.profiles
+    where membership_tier = 'admin' and member_status = 'approved';
+    if v_admin_count <= 1 then
+      raise exception 'cannot delete last admin';
+    end if;
+  end if;
+
+  perform public._admin_clear_user_refs(ARRAY[v_target]);
+  delete from auth.users where id = v_target;
+end;
+$$;
+
+grant execute on function public.rpc_delete_account(uuid) to authenticated;

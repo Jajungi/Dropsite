@@ -66,7 +66,6 @@ type AdminSection =
   | 'social'
   | 'points'
   | 'logs'
-  | 'system'
   | 'developer';
 
 interface AdminDashboardProps {
@@ -180,7 +179,6 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
     },
     { key: 'points', label: '포인트' },
     { key: 'courts', label: '코트' },
-    { key: 'system', label: '시스템' },
     { key: 'developer', label: '개발자' },
   ];
 
@@ -340,11 +338,7 @@ export function AdminDashboard({ adminId }: AdminDashboardProps) {
               onToggle={() => setInfinitePoints(!infinitePoints)}
             />
           </Card>
-        </View>
-      )}
 
-      {section === 'system' && (
-        <View style={styles.sectionBody}>
           <AdminDbResetPanel adminId={adminId} />
         </View>
       )}
@@ -998,7 +992,7 @@ function MatchCard({
   onToggle?: () => void;
   actions?: React.ReactNode;
 }) {
-  const modeLabel = match.gameMode ? GAME_MODE_CONFIG[match.gameMode].label : '일반';
+  const modeLabel = match.gameMode ? GAME_MODE_CONFIG[match.gameMode].label : '경기';
   const teamANames = match.teamA.map((id) => resolveUser(id)?.name ?? id).join(', ');
   const teamBNames = match.teamB.map((id) => resolveUser(id)?.name ?? id).join(', ');
 

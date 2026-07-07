@@ -14,7 +14,6 @@ import { Button } from '@/src/components/ui/Button';
 import { TouchGuard } from '@/src/components/ui/TouchGuard';
 import { useAuthStore } from '@/src/stores/authStore';
 import { useLessonStore } from '@/src/stores/lessonStore';
-import { isGuestUser } from '@/src/utils/guestAccess';
 import { colors, borderRadius, spacing, typography } from '@/src/theme';
 
 export interface CourtDetailContentProps {
@@ -75,8 +74,6 @@ export function CourtDetailContent({
   }, [court.id]);
 
   const currentUserId = useAuthStore((s) => s.currentUser?.id);
-  const currentUser = useAuthStore((s) => s.currentUser);
-  const isGuest = isGuestUser(currentUser);
   const canReserveCoachCourt = useLessonStore((s) => s.canReserveCoachCourt);
   // 코치 코트는 기본 예약 불가 — 레슨 권한·차례가 된 사용자만 예약 가능
   const coachReservable = court.isCoachCourt
@@ -258,7 +255,6 @@ export function CourtDetailContent({
               nantaHalf={nantaHalf}
               onChange={setGameMode}
               onNantaHalfChange={setNantaHalf}
-              disabledModes={isGuest ? ['ranked'] : undefined}
             />
           )}
           <Text style={[styles.blockTitle, { marginTop: spacing.sm }]}>게임 수</Text>

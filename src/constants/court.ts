@@ -248,18 +248,19 @@ export const GAME_MODE_CONFIG: Record<
     activeFloorTint: 'rgba(124, 196, 120, 0.28)',
   },
   casual: {
-    label: '일반 경기',
-    shortLabel: '일반',
+    label: '경기',
+    shortLabel: '경기',
     color: '#4A72C4',
     badgeBg: '#DDE8FA',
     activeFloorTint: 'rgba(91, 141, 239, 0.2)',
   },
+  // 랭크전은 '경기'로 통합됨 — 과거 데이터 표시용으로만 유지
   ranked: {
-    label: '랭크전',
-    shortLabel: '랭크',
-    color: '#7A5CB8',
-    badgeBg: '#E8DFF8',
-    activeFloorTint: 'rgba(155, 127, 212, 0.22)',
+    label: '경기',
+    shortLabel: '경기',
+    color: '#4A72C4',
+    badgeBg: '#DDE8FA',
+    activeFloorTint: 'rgba(91, 141, 239, 0.2)',
   },
 };
 
@@ -275,4 +276,5 @@ export const NANTA_HALF_LABEL: Record<NantaHalf, string> = {
   far: '입구 쪽 반',
 };
 
-export const GAME_MODES: GameMode[] = ['nanta', 'casual', 'ranked'];
+// 예약 시 선택 가능한 모드 — 랭크전은 '경기'로 통합되어 제외
+export const GAME_MODES: GameMode[] = ['nanta', 'casual'];

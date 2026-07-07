@@ -15,6 +15,8 @@ export interface GuideSection {
   courtInteractive?: boolean;
   /** 포인트 정책 섹션: 적립·사용 표 */
   pointsTable?: boolean;
+  /** 랭크 섹션: 티어(Elo 구간) 분포 바 */
+  tierDistribution?: boolean;
 }
 
 export const GUIDE_SECTIONS: GuideSection[] = [
@@ -270,7 +272,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       {
         title: '충전 불가',
         content:
-          '별도의 결제나 충전 없이, 출석·청소·네트 관리·랭크전 승리 등 동아리 활동으로만 포인트를 얻을 수 있습니다.',
+          '별도의 결제나 충전 없이, 출석·청소·네트 관리·경기 참여 등 동아리 활동으로만 포인트를 얻을 수 있습니다.',
       },
       {
         title: '티어별 예약 할인',
@@ -288,6 +290,26 @@ export const GUIDE_SECTIONS: GuideSection[] = [
       },
     ],
     pointsTable: true,
+  },
+  {
+    id: 'rank',
+    title: '랭크 · 티어',
+    icon: '🏆',
+    intro:
+      '경기 점수를 입력하면 Elo 점수가 오르내리고, 점수 구간에 따라 티어가 결정됩니다. 점수를 입력하지 않은 친선경기는 Elo가 변동하지 않아요. 시작 점수는 1000점(실버)입니다.',
+    items: [
+      {
+        title: 'Elo 점수란?',
+        content:
+          '상대 실력을 반영해 승패마다 점수가 변동하는 레이팅입니다. 강한 상대를 이기면 더 많이 오르고, 약한 상대에게 지면 더 많이 내려갑니다.',
+      },
+      {
+        title: '티어 승급·강등',
+        content:
+          '아래 구간을 넘으면 자동으로 티어가 바뀝니다. 별도 승급전은 없으며 점수만 충족하면 즉시 반영됩니다.',
+      },
+    ],
+    tierDistribution: true,
   },
   {
     id: 'manner',

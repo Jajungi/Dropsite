@@ -94,9 +94,6 @@ export const useCourtStore = create<CourtState>((set, get) => ({
     }
 
     if (isGuest) {
-      if (gameMode === 'ranked') {
-        return { success: false, message: '게스트는 랭크전 예약이 불가해요.' };
-      }
       if (court.isCoachCourt || courtId === COACH_COURT_ID) {
         return { success: false, message: '게스트는 코치 코트를 예약할 수 없어요.' };
       }
@@ -130,8 +127,7 @@ export const useCourtStore = create<CourtState>((set, get) => ({
       return { success: false, message: `포인트가 부족해요. (필요: ${cost}P)` };
     }
 
-    const modeLabel =
-      gameMode === 'nanta' ? '난타' : gameMode === 'ranked' ? '랭크' : '일반';
+    const modeLabel = gameMode === 'nanta' ? '난타' : '경기';
     const peakNote = peak ? ' · 피크타임' : '';
     const players = teamPlayers && teamPlayers.length ? teamPlayers : [userToCourtPlayer(user)];
     const reserveDesc = `${court.name} 예약 · ${modeLabel} ${gameCount}게임${peakNote}`;

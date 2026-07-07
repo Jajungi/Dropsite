@@ -53,6 +53,8 @@ function typeIcon(type: PointTransaction['type']) {
       return '🏸';
     case 'match_win':
       return '🏆';
+    case 'match_loss':
+      return '🤝';
     case 'cleaning':
       return '🧹';
     case 'net_setup':

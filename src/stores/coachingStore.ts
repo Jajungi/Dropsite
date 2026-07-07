@@ -4,6 +4,8 @@ import { MOCK_COACH_ANNOUNCEMENTS } from '@/src/services/mockData';
 import { persistAppState } from '@/src/services/appState';
 import { isSupabaseEnabled } from '@/src/lib/supabase';
 import { recordAdminLogAsCurrentUser } from '@/src/services/adminLog';
+import { useAuthStore } from '@/src/stores/authStore';
+import { canManageCoachAnnouncement, canPostCoachAnnouncement } from '@/src/utils/coachAccess';
 
 interface CoachingState {
   announcements: CoachAnnouncement[];
@@ -28,6 +30,13 @@ export const useCoachingStore = create<CoachingState>((set, get) => ({
     }),
 
   postAnnouncement: (authorId, authorName, title, message) => {
+    const author =
+      useAuthStore.getState().users.find((u) => u.id === authorId) ??
+      useAuthStore.getState().currentUser;
+    if (!canPostCoachAnnouncement(author)) {
+      return { success: false, message: '코치 권한이 있는 회원만 공지를 작성할 수 있어요.' };
+    }
+
     const trimmedTitle = title.trim();
     const trimmedMessage = message.trim();
     if (!trimmedTitle || !trimmedMessage) {
@@ -73,6 +82,12 @@ export const useCoachingStore = create<CoachingState>((set, get) => ({
   },
 
   removeAnnouncement: (id) => {
+    const entry = get().announcements.find((a) => a.id === id);
+    const currentUser = useAuthStore.getState().currentUser;
+    if (!canManageCoachAnnouncement(currentUser, entry?.authorId)) {
+      return;
+    }
+
     set((state) => ({
       announcements: state.announcements.filter((a) => a.id !== id),
     }));

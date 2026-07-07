@@ -13,6 +13,8 @@ function matchToDb(match: MatchResult) {
     winner: match.winner,
     status: match.status,
     played_at: match.playedAt,
+    confirmed_at: match.confirmedAt ?? null,
+    confirmed_by: match.confirmedBy ?? null,
     game_mode: match.gameMode ?? null,
     elo_changes: match.eloChanges ?? null,
   };

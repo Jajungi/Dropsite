@@ -28,6 +28,8 @@ import { initServerSync } from '@/src/services/serverSync';
 import { initSupabaseApp } from '@/src/services/supabase/init';
 import { isSupabaseEnabled } from '@/src/lib/supabase';
 import { initLocalNotifications } from '@/src/services/localNotifications';
+import { registerPushTokenForUser } from '@/src/services/pushNotifications';
+import { useAuthStore } from '@/src/stores/authStore';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -63,6 +65,15 @@ export default function RootLayout() {
   useEffect(() => {
     void initLocalNotifications();
   }, []);
+
+  const currentUserId = useAuthStore((s) => s.currentUser?.id ?? null);
+  const isGuestSession = useAuthStore((s) => s.isGuestSession);
+
+  useEffect(() => {
+    if (currentUserId && !isGuestSession) {
+      void registerPushTokenForUser(currentUserId);
+    }
+  }, [currentUserId, isGuestSession]);
 
   useEffect(() => {
     initCrossTabSync();

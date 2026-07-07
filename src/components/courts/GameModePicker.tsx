@@ -9,7 +9,7 @@ interface GameModePickerProps {
   nantaHalf: NantaHalf;
   onChange: (mode: GameMode) => void;
   onNantaHalfChange: (half: NantaHalf) => void;
-  /** 선택 불가 모드 (예: 게스트 → ranked) */
+  /** 선택 불가 모드 */
   disabledModes?: GameMode[];
 }
 

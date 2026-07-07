@@ -5,6 +5,7 @@ import {
   isSupabaseEnabled,
 } from '@/src/lib/supabase';
 import { fetchAllProfiles, fetchProfileById } from '@/src/services/supabase/profiles';
+import { validateStudentId } from '@/src/utils/studentId';
 
 export type AuthResult = { success: boolean; message: string };
 
@@ -20,7 +21,7 @@ function formatAuthError(error: AuthError): string {
     m.includes('already registered') ||
     m.includes('already been registered')
   ) {
-    return '이미 등록된 학번이에요.';
+    return '이미 등록된 학번이에요. 다른 학번으로 가입했거나 계정이 있어요.';
   }
   if (code === 'signup_disabled' || (m.includes('signup') && m.includes('disabled'))) {
     return '회원가입이 꺼져 있어요. Supabase → Authentication → Sign In / Providers 에서 확인해 주세요.';
@@ -36,6 +37,15 @@ function formatAuthError(error: AuthError): string {
   }
   if (m.includes('password') || code === 'weak_password') {
     return '비밀번호가 요구 조건을 만족하지 않아요. 6자 이상으로 설정해 주세요.';
+  }
+  if (m.includes('invalid student id') || m.includes('student id required')) {
+    return '학번은 연도 4자리 + 숫자 5자리 형식이에요. (예: 202410001)';
+  }
+  if (m.includes('cannot delete last admin')) {
+    return '마지막 관리자 계정은 삭제할 수 없어요.';
+  }
+  if (m.includes('forbidden')) {
+    return '권한이 없어요.';
   }
 
   const suffix = code ? ` (${code})` : '';
@@ -66,8 +76,13 @@ export async function supabaseLogin(
   }
 
   const trimmed = studentId.trim();
+  const idCheck = validateStudentId(trimmed);
+  if (!idCheck.ok) {
+    return { success: false, message: idCheck.message };
+  }
+
   const { data, error } = await getSupabase().auth.signInWithPassword({
-    email: studentIdToAuthEmail(trimmed),
+    email: studentIdToAuthEmail(idCheck.normalized),
     password,
   });
 
@@ -105,22 +120,27 @@ export async function supabaseRegister(input: {
 
   const trimmedId = input.studentId.trim();
   const trimmedName = input.name.trim();
-  if (!trimmedId || !trimmedName) {
-    return { success: false, message: '학번과 이름을 입력해 주세요.' };
+  const idCheck = validateStudentId(trimmedId);
+  if (!idCheck.ok) {
+    return { success: false, message: idCheck.message };
+  }
+  if (!trimmedName) {
+    return { success: false, message: '이름을 입력해 주세요.' };
   }
   if (input.password.trim().length < 6) {
     return { success: false, message: '비밀번호는 6자 이상이어야 해요.' };
   }
 
-  const authEmail = studentIdToAuthEmail(trimmedId);
+  const normalizedId = idCheck.normalized;
+  const authEmail = studentIdToAuthEmail(normalizedId);
   const { data, error } = await getSupabase().auth.signUp({
     email: authEmail,
     password: input.password,
     options: {
       data: {
-        student_id: trimmedId,
+        student_id: normalizedId,
         name: trimmedName,
-        contact_email: input.email.trim() || `${trimmedId}@dgist.ac.kr`,
+        contact_email: input.email.trim() || `${normalizedId}@dgist.ac.kr`,
       },
     },
   });
@@ -135,15 +155,43 @@ export async function supabaseRegister(input: {
   if (data.user && !data.session) {
     return {
       success: true,
-      message: '가입 신청이 완료됐어요. 운영진 승인 후 로그인할 수 있어요.',
+      message: '회원가입이 완료됐어요. 바로 로그인할 수 있어요.',
     };
   }
 
   await getSupabase().auth.signOut();
   return {
     success: true,
-    message: '가입 신청이 완료됐어요. 운영진 승인 후 로그인할 수 있어요.',
+    message: '회원가입이 완료됐어요. 바로 로그인할 수 있어요.',
   };
+}
+
+/** 본인 또는 관리자가 계정 삭제 (학번 재가입 가능) */
+export async function supabaseDeleteAccount(targetUserId?: string): Promise<AuthResult> {
+  if (!isSupabaseEnabled()) {
+    return { success: false, message: 'Supabase가 설정되지 않았어요.' };
+  }
+
+  const { error } = await getSupabase().rpc('rpc_delete_account', {
+    p_target_id: targetUserId ?? null,
+  });
+
+  if (error) {
+    const msg = (error.message ?? '').toLowerCase();
+    if (__DEV__) console.warn('[supabase delete account]', error.message);
+    if (msg.includes('cannot delete last admin')) {
+      return { success: false, message: '마지막 관리자 계정은 삭제할 수 없어요.' };
+    }
+    if (msg.includes('forbidden')) {
+      return { success: false, message: '권한이 없어요.' };
+    }
+    if (msg.includes('user not found')) {
+      return { success: false, message: '회원을 찾을 수 없어요.' };
+    }
+    return { success: false, message: error.message || '계정 삭제에 실패했어요.' };
+  }
+
+  return { success: true, message: '계정이 삭제되었어요.' };
 }
 
 export async function supabaseLogout(): Promise<void> {

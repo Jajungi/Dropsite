@@ -47,7 +47,7 @@
 | 9코트 한 화면 배치 (3×3, 무대/입구) | ✅ | `GYM_COURT_ROWS` |
 | 화면 높이에 맞춘 코트 크기 | ✅ | `useLayoutMode` |
 | 코트 탭 → 인라인 확대 (모달 아님) | ✅ | `CourtExpandView` |
-| **경기 유형 표시 (난타/일반/랭크)** | ✅ | `GameModeBadge`, `CourtIllustration` |
+| **경기 유형 표시 (난타/경기)** | ✅ | `GameModeBadge`, `CourtIllustration` |
 | **난타 반코트 시각화** | ✅ | 어두운 미사용 반 + 라벨 |
 | 예약 시 경기 유형 선택 | ✅ | `GameModePicker` |
 | 빈 영역 탭 시 확대 닫기 | ✅ | side tap |
@@ -63,13 +63,15 @@
 
 | 유형 | 코드 | 코트 표시 |
 |------|------|-----------|
-| 난타 | `nanta` | 반코트만 사용 — 미사용 반 어둡게 + 왼/오른쪽 반 라벨 |
-| 일반 경기 | `casual` | 파란 테두리 + `일반` 배지 |
-| 랭크전 | `ranked` | 보라 테두리 + `랭크` 배지 |
+| 난타 | `nanta` | 반코트만 사용 — 미사용 반 어둡게 + 왼/오른쪽 반 라벨. 친선(Elo 미반영) |
+| 경기 | `casual` | 파란 테두리 + `경기` 배지 |
+| ~~랭크전~~ | `ranked` | 경기(`casual`)로 통합됨 — 과거 데이터 표시용으로만 유지 |
 
 - `Court.gameMode`, `Court.nantaHalf` (`near` \| `far`) — 네트 가로 상·하 반
-- 예약 시 `GameModePicker`로 선택
-- ⬜ 랭크전 ELO 반영 규칙 (백엔드)
+- 예약 시 `GameModePicker`로 선택 (난타 / 경기)
+- ✅ ELO 반영 규칙: **경기 점수를 입력하면** Elo·전적·포인트가 **즉시** 반영. 점수를 입력하지 않으면 친선경기(Elo 유지). 난타는 항상 친선.
+- ✅ 어뷰징 방지: 참가자 중 누군가 하루 `AUTO_RATED_MATCH_DAILY_LIMIT`회(기본 8회)를 넘기면 자동 반영 대신 관리자 승인 대기로 전환.
+- ✅ 포인트: 승리 +`MATCH_WIN`(50) / 패배 +`MATCH_LOSS`(20) 팀원당 지급.
 
 ---
 
@@ -192,7 +194,8 @@ others      = checkedIn && !friend && id !== me  // 친구 섹션 아래
 | 개발용 동기화 서버 (REST + WS) | ✅ | `npm run server`, `EXPO_PUBLIC_SYNC_URL` |
 | **Supabase 마이그레이션** | 🟡 진행 중 | `docs/SUPABASE_MIGRATION.md` — Auth·RLS·Realtime·Storage |
 | 프로덕션 REST API | ⬜ | Supabase RPC로 대체 예정 |
-| 푸시 알림 (합류·코치) | ⬜ | `expo-notifications` + 서버 |
+| 인앱 알림 (알림함·토스트·사이렌) | ✅ | `notificationStore`, `NotificationPanel` |
+| 원격 푸시 (합류·코치·공지) | 🟡 코드 완료 | `pushNotifications.ts` + `send-push` Edge Function. 외부 설정은 `docs/PUSH_AND_PLAY_STORE.md` |
 
 ### 동기화 서버
 

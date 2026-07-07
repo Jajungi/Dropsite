@@ -65,9 +65,14 @@ export function isPeakTime(now: Date = new Date()): boolean {
   return (PEAK_HOURS as readonly number[]).includes(now.getHours());
 }
 
-/** 랭크전 승리 — 팀원당 고정 +50p */
-export function calculateWinPoints(ranked = true): number {
-  return ranked ? POINT_EARN.RANKED_WIN : 0;
+/** 경기 승리 — 팀원당 고정 (+승리 축하) */
+export function calculateWinPoints(): number {
+  return POINT_EARN.MATCH_WIN;
+}
+
+/** 경기 패배 — 팀원당 고정 (+패배 위로, 승리보다 적게) */
+export function calculateLossPoints(): number {
+  return POINT_EARN.MATCH_LOSS;
 }
 
 export function calculateCleaningPoints(): number {

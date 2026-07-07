@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, LayoutAnimation, Platform, UIManager
 import type { GuideSection } from '@/src/constants/guideContent';
 import { InteractiveRulesCourt } from './InteractiveRulesCourt';
 import { GuidePointsTable } from './GuidePointsTable';
+import { TierDistribution } from './TierDistribution';
 import { colors, borderRadius, spacing, typography } from '@/src/theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -14,7 +15,7 @@ interface GuideAccordionProps {
 }
 
 export function GuideAccordion({ sections }: GuideAccordionProps) {
-  const [expanded, setExpanded] = useState<string | null>(sections[0]?.id ?? null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const toggle = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -64,6 +65,8 @@ export function GuideAccordion({ sections }: GuideAccordionProps) {
                 })}
 
                 {section.pointsTable && <GuidePointsTable />}
+
+                {section.tierDistribution && <TierDistribution />}
               </View>
             )}
           </View>

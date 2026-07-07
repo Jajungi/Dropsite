@@ -22,7 +22,7 @@ export function EloChart({ data, width, height = 120 }: EloChartProps) {
     return (
       <View style={styles.container} onLayout={onLayout}>
         <Text style={styles.title}>Elo 레이팅 추이</Text>
-        <ProfileEmptyState message="아직 기록이 없어요" hint="랭크전 결과가 쌓이면 그래프가 표시돼요" />
+        <ProfileEmptyState message="아직 기록이 없어요" hint="경기 결과가 쌓이면 그래프가 표시돼요" />
       </View>
     );
   }

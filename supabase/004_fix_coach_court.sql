@@ -1,8 +1,8 @@
 -- 코치 코트 = 3번, 센터 코트 = 4·5·6번으로 정정
 -- (이미 예약 중인 코트는 상태 유지, 플래그만 갱신)
 
-update public.courts set is_coach_court = (id = 3);
-update public.courts set is_center = (id in (4, 5, 6));
+update public.courts set is_coach_court = (id = 3) where id is not null;
+update public.courts set is_center = (id in (4, 5, 6)) where id is not null;
 
 update public.courts set name = '코치코트' where id = 3;
 update public.courts set name = id || '코트' where id <> 3;
@@ -20,7 +20,8 @@ update public.courts set
   nanta_half = null,
   max_games = 0,
   games_completed = 0,
-  updated_at = now();
+  updated_at = now()
+where id is not null;
 
 -- 확인
 select id, name, is_center, is_coach_court, status from public.courts order by id;

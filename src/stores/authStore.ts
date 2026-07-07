@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import type { GeoLocation, User, AttendanceRecord, MembershipTier, MemberStatus, LessonAccessStatus } from '@/src/types';
+import type { GeoLocation, User, AttendanceRecord, MembershipTier, MemberStatus, LessonAccessStatus, RankTier } from '@/src/types';
 import { MOCK_USERS, MOCK_ATTENDANCE } from '@/src/services/mockData';
-import { AVATAR_COLORS, GYM_LOCATION } from '@/src/constants';
+import { AVATAR_COLORS, GYM_LOCATION, RANK_THRESHOLDS } from '@/src/constants';
 import { isWithinGymFence } from '@/src/services/geoFence';
 import { hashPassword, verifyPassword, seedDemoCredentials } from '@/src/services/authCredentials';
 import { getAttendancePoints, getRankFromElo } from '@/src/services/points';
@@ -12,14 +12,16 @@ import { useNotificationStore } from './notificationStore';
 import { persistAppState } from '@/src/services/appState';
 import { recordAdminLog, recordAdminLogAsCurrentUser, recordAdminLogAsActor } from '@/src/services/adminLog';
 import { isSupabaseEnabled } from '@/src/lib/supabase';
-import { supabaseLogin, supabaseLogout, supabaseRegister, supabaseGuestLogin } from '@/src/services/supabase/auth';
+import { supabaseLogin, supabaseLogout, supabaseRegister, supabaseGuestLogin, supabaseDeleteAccount } from '@/src/services/supabase/auth';
 import { fetchAllProfiles, uploadAvatar, removeAvatar } from '@/src/services/supabase/profiles';
+import { clearSavedLogin } from '@/src/services/quickLogin';
 import { INFINITE_DEV_POINTS } from '@/src/utils/responsive';
 import {
   createLocalGuestUser,
   isGuestUser,
   validateGuestName,
 } from '@/src/utils/guestAccess';
+import { validateStudentId } from '@/src/utils/studentId';
 import { saveGuestSession, clearGuestSession } from '@/src/services/guestSession';
 
 function pickAvatarColor(index: number): string {
@@ -68,6 +70,11 @@ interface AuthState {
   setAuthHydrated: () => void;
   approveMember: (userId: string) => void;
   rejectMember: (userId: string) => void;
+  deleteMyAccount: () => Promise<{ success: boolean; message: string }>;
+  adminDeleteAccount: (
+    userId: string,
+    adminId: string
+  ) => Promise<{ success: boolean; message: string }>;
   updateUserPoints: (userId: string, delta: number) => void;
   updateUserElo: (userId: string, delta: number) => void;
   syncUserRank: (userId: string) => void;
@@ -120,6 +127,7 @@ interface AuthState {
     userId: string,
     status: LessonAccessStatus
   ) => { success: boolean; message: string };
+  adminSetCoach: (userId: string, enabled: boolean) => { success: boolean; message: string };
   adminAdjustPoints: (
     userId: string,
     delta: number,
@@ -136,6 +144,7 @@ interface AuthState {
   ) => { success: boolean; message: string };
   claimShuttlecock: (userId: string) => { success: boolean; message: string };
   adminAdjustElo: (userId: string, delta: number, reason: string) => { success: boolean; message: string };
+  adminPlaceRank: (userId: string, rank: RankTier) => { success: boolean; message: string };
   adminSetAdminNote: (userId: string, note: string) => { success: boolean; message: string };
   adminSendSystemNotice: (
     userId: string,
@@ -149,6 +158,7 @@ function normalizeUser(user: User): User {
     ...user,
     nickname: user.name,
     lessonStatus: user.lessonStatus ?? 'none',
+    isCoach: user.isCoach ?? false,
   };
 }
 
@@ -159,6 +169,43 @@ function normalizeUsers(users: User[]): User[] {
 function syncCurrentUser(users: User[], currentId: string | null): User | null {
   if (!currentId) return null;
   return users.find((u) => u.id === currentId) ?? null;
+}
+
+function removeUserFromState(
+  set: (fn: (state: AuthState) => Partial<AuthState>) => void,
+  get: () => AuthState,
+  userId: string,
+  studentId: string
+) {
+  set((state) => {
+    const { [studentId]: _removed, ...restCredentials } = state.credentials;
+    const users = state.users.filter((u) => u.id !== userId);
+    const isSelf = state.currentUser?.id === userId;
+    return {
+      users,
+      credentials: restCredentials,
+      currentUser: isSelf ? null : syncCurrentUser(users, state.currentUser?.id ?? null),
+      isAuthenticated: isSelf ? false : state.isAuthenticated,
+      isGuestSession: isSelf ? false : state.isGuestSession,
+    };
+  });
+  if (!isSupabaseEnabled()) persistAppState();
+}
+
+function canDeleteUser(
+  users: User[],
+  target: User,
+  _actorId?: string
+): { allowed: boolean; message?: string } {
+  if (target.membershipTier === 'admin') {
+    const adminCount = users.filter(
+      (u) => u.membershipTier === 'admin' && u.memberStatus === 'approved'
+    ).length;
+    if (adminCount <= 1) {
+      return { allowed: false, message: '마지막 관리자 계정은 삭제할 수 없어요.' };
+    }
+  }
+  return { allowed: true };
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -196,8 +243,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   login: async (studentId, password) => {
+    const idCheck = validateStudentId(studentId);
+    if (!idCheck.ok) {
+      return { success: false, message: idCheck.message };
+    }
+
     if (isSupabaseEnabled()) {
-      const result = await supabaseLogin(studentId, password);
+      const result = await supabaseLogin(idCheck.normalized, password);
       if (!result.success) return result;
       const users = await fetchAllProfiles();
       const user = users.find((u) => u.id === result.userId) ?? null;
@@ -206,7 +258,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return { success: true, message: result.message };
     }
 
-    const trimmed = studentId.trim();
+    const trimmed = idCheck.normalized;
     const user = get().users.find((u) => u.studentId === trimmed);
     if (!user) {
       return { success: false, message: '학번을 찾을 수 없어요. 회원가입을 먼저 해 주세요.' };
@@ -274,6 +326,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    try {
+      const { unregisterPushToken } = await import('@/src/services/pushNotifications');
+      await unregisterPushToken();
+    } catch {
+      // 푸시 토큰 해제 실패는 로그아웃을 막지 않음
+    }
     if (isSupabaseEnabled()) await supabaseLogout();
     await clearGuestSession();
     set({ currentUser: null, isAuthenticated: false, isGuestSession: false });
@@ -281,30 +339,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   register: async ({ studentId, name, email, password }) => {
-    if (isSupabaseEnabled()) {
-      return supabaseRegister({ studentId, name, email, password });
+    const idCheck = validateStudentId(studentId);
+    if (!idCheck.ok) {
+      return { success: false, message: idCheck.message };
     }
-
-    const trimmedId = studentId.trim();
+    const normalizedId = idCheck.normalized;
     const trimmedName = name.trim();
-    if (!trimmedId || !trimmedName) {
-      return { success: false, message: '학번과 이름을 입력해 주세요.' };
+    if (!trimmedName) {
+      return { success: false, message: '이름을 입력해 주세요.' };
     }
     if (password.trim().length < 6) {
       return { success: false, message: '비밀번호는 6자 이상이어야 해요.' };
     }
-    if (get().users.some((u) => u.studentId === trimmedId)) {
-      return { success: false, message: '이미 등록된 학번이에요.' };
+
+    if (isSupabaseEnabled()) {
+      return supabaseRegister({ studentId: normalizedId, name: trimmedName, email, password });
+    }
+
+    if (get().users.some((u) => u.studentId === normalizedId)) {
+      return { success: false, message: '이미 등록된 학번이에요. 로그인하거나 계정을 삭제한 뒤 다시 가입해 주세요.' };
     }
 
     const newUser: User = {
       id: `user-${Date.now()}`,
-      studentId: trimmedId,
+      studentId: normalizedId,
       name: trimmedName,
       nickname: trimmedName,
-      email: email.trim() || `${trimmedId}@dgist.ac.kr`,
+      email: email.trim() || `${normalizedId}@dgist.ac.kr`,
       membershipTier: 'associate',
-      memberStatus: 'pending',
+      memberStatus: 'approved',
       rank: 'bronze',
       elo: 1000,
       points: 0,
@@ -323,13 +386,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       users: [...state.users, newUser],
       credentials: {
         ...state.credentials,
-        [trimmedId]: hashPassword(password),
+        [normalizedId]: hashPassword(password),
       },
     }));
     persistAppState();
     return {
       success: true,
-      message: '가입 신청이 접수되었어요. 운영진 승인 후 로그인할 수 있어요.',
+      message: '회원가입이 완료됐어요. 바로 로그인할 수 있어요.',
     };
   },
 
@@ -372,6 +435,81 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     }
     persistAppState();
+  },
+
+  deleteMyAccount: async () => {
+    const user = get().currentUser;
+    if (!user) {
+      return { success: false, message: '로그인이 필요해요.' };
+    }
+    const guard = canDeleteUser(get().users, user);
+    if (!guard.allowed) {
+      return { success: false, message: guard.message ?? '계정을 삭제할 수 없어요.' };
+    }
+
+    if (isSupabaseEnabled()) {
+      const result = await supabaseDeleteAccount();
+      if (!result.success) return result;
+      await supabaseLogout();
+      await clearGuestSession();
+      await clearSavedLogin();
+      const users = await fetchAllProfiles();
+      set({
+        users,
+        currentUser: null,
+        isAuthenticated: false,
+        isGuestSession: false,
+        credentials: {},
+      });
+      return result;
+    }
+
+    removeUserFromState(set, get, user.id, user.studentId);
+    await clearSavedLogin();
+    return { success: true, message: '계정이 삭제되었어요. 같은 학번으로 다시 가입할 수 있어요.' };
+  },
+
+  adminDeleteAccount: async (userId, adminId) => {
+    const target = get().users.find((u) => u.id === userId);
+    if (!target) {
+      return { success: false, message: '회원을 찾을 수 없어요.' };
+    }
+    if (userId === adminId) {
+      return { success: false, message: '본인 계정은 프로필에서 삭제해 주세요.' };
+    }
+    const guard = canDeleteUser(get().users, target, adminId);
+    if (!guard.allowed) {
+      return { success: false, message: guard.message ?? '계정을 삭제할 수 없어요.' };
+    }
+
+    if (isSupabaseEnabled()) {
+      const result = await supabaseDeleteAccount(userId);
+      if (!result.success) return result;
+      const users = await fetchAllProfiles();
+      set((state) => ({
+        users,
+        currentUser: syncCurrentUser(users, state.currentUser?.id ?? null),
+        isAuthenticated: Boolean(syncCurrentUser(users, state.currentUser?.id ?? null)),
+      }));
+      recordAdminLogAsActor(adminId, {
+        category: 'member',
+        action: 'member.delete',
+        message: `${target.name} (${target.studentId}) 계정 삭제`,
+        targetId: userId,
+        targetName: target.name,
+      });
+      return result;
+    }
+
+    removeUserFromState(set, get, userId, target.studentId);
+    recordAdminLogAsActor(adminId, {
+      category: 'member',
+      action: 'member.delete',
+      message: `${target.name} (${target.studentId}) 계정 삭제`,
+      targetId: userId,
+      targetName: target.name,
+    });
+    return { success: true, message: `${target.name}님 계정을 삭제했어요.` };
   },
 
   updateUserPoints: (userId, delta) =>
@@ -962,6 +1100,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return { success: true, message: `${user.name}님의 레슨 권한을 변경했어요.` };
   },
 
+  adminSetCoach: (userId, enabled) => {
+    const user = get().users.find((u) => u.id === userId);
+    if (!user) return { success: false, message: '회원을 찾을 수 없어요.' };
+
+    set((state) => {
+      const users = state.users.map((u) =>
+        u.id === userId ? { ...u, isCoach: enabled } : u
+      );
+      const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
+      return { users, currentUser };
+    });
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
+
+    recordAdminLogAsCurrentUser({
+      category: 'lesson',
+      action: enabled ? 'coach.grant' : 'coach.revoke',
+      message: `${user.name} 코치 권한 ${enabled ? '부여' : '해제'}`,
+      targetId: userId,
+      targetName: user.name,
+    });
+    persistAppState();
+    return {
+      success: true,
+      message: enabled
+        ? `${user.name}님에게 코치 권한을 부여했어요.`
+        : `${user.name}님의 코치 권한을 해제했어요.`,
+    };
+  },
+
   adminAdjustPoints: (userId, delta, reason) => {
     const user = get().users.find((u) => u.id === userId);
     if (!user) return { success: false, message: '회원을 찾을 수 없어요.' };
@@ -1140,6 +1307,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return {
       success: true,
       message: `${user.name}님 Elo ${delta >= 0 ? '+' : ''}${delta} 반영`,
+    };
+  },
+
+  adminPlaceRank: (userId, rank) => {
+    const user = get().users.find((u) => u.id === userId);
+    if (!user) return { success: false, message: '회원을 찾을 수 없어요.' };
+
+    const startElo = RANK_THRESHOLDS[rank].min;
+    set((state) => {
+      const users = state.users.map((u) =>
+        u.id === userId ? { ...u, elo: startElo, rank: getRankFromElo(startElo) } : u
+      );
+      const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
+      return { users, currentUser };
+    });
+
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/profiles')
+        .then(({ updateProfileStatsRemote }) =>
+          updateProfileStatsRemote(userId, { elo: startElo, rank: getRankFromElo(startElo) })
+        )
+        .catch((err) => console.warn('[profile] rank placement sync failed', err));
+    }
+
+    recordAdminLogAsCurrentUser({
+      category: 'member',
+      action: 'member.rank_place',
+      message: `${user.name} 시작 랭크 배치 → ${RANK_THRESHOLDS[rank].label} (Elo ${startElo})`,
+      targetId: userId,
+      targetName: user.name,
+      meta: { rank, elo: startElo },
+    });
+    persistAppState();
+    return {
+      success: true,
+      message: `${user.name}님을 ${RANK_THRESHOLDS[rank].label}(Elo ${startElo})에 배치했어요.`,
     };
   },
 

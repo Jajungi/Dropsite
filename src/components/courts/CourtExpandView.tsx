@@ -297,6 +297,7 @@ export function CourtExpandView({
           filter={filter}
           myUserId={myUserId}
           registerCourtRef={registerCourtRef}
+          showCoachingLink={!selectedCourtId}
         />
       </Animated.View>
 

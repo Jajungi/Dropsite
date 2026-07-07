@@ -12,7 +12,6 @@ import { CourtOverviewHeader } from '@/src/components/courts/CourtOverviewHeader
 import { CourtExpandView } from '@/src/components/courts/CourtExpandView';
 import { MatchScoreSheet } from '@/src/components/courts/MatchScoreSheet';
 import { ActivityNoticeBanner } from '@/src/components/guide/ActivityNoticeBanner';
-import { CoachingEntryLink } from '@/src/components/coaching/CoachingEntryLink';
 import { PageContainer } from '@/src/components/layout/PageContainer';
 import { colors } from '@/src/theme';
 import type { Court, GameMode, NantaHalf } from '@/src/types';
@@ -136,9 +135,30 @@ export default function CourtsScreen() {
     const mid = Math.ceil(selectedCourt.players.length / 2);
     const teamA = selectedCourt.players.slice(0, mid).map((p) => p.userId);
     const teamB = selectedCourt.players.slice(mid).map((p) => p.userId);
-    submitMatchResult(selectedCourt.id, teamA, teamB, scoreA, scoreB, selectedCourt.gameMode);
+    const result = submitMatchResult(
+      selectedCourt.id,
+      teamA,
+      teamB,
+      scoreA,
+      scoreB,
+      selectedCourt.gameMode
+    );
     setShowScoreSheet(false);
-    showToast({ type: 'success', title: '', message: '경기 결과가 제출되었어요.' });
+    if (!result.recorded) {
+      showToast({ type: 'warning', title: '', message: '점수를 다시 확인해주세요.' });
+      return;
+    }
+    if (result.requiresApproval) {
+      showToast({
+        type: 'info',
+        title: '',
+        message: '오늘 경기가 많아 관리자 승인 후 Elo가 반영돼요.',
+      });
+    } else if (result.applied) {
+      showToast({ type: 'success', title: '', message: 'Elo·포인트가 반영됐어요.' });
+    } else {
+      showToast({ type: 'success', title: '', message: '친선경기로 기록됐어요.' });
+    }
   };
 
   return (
@@ -192,8 +212,6 @@ export default function CourtsScreen() {
             />
           </View>
 
-          {selectedCourtId === null && <CoachingEntryLink />}
-
           {selectedCourtId === null && needsVerticalScroll && (
             <Text style={styles.scrollHint}>아래로 스크롤해 전체 코트를 볼 수 있어요</Text>
           )}
@@ -204,6 +222,7 @@ export default function CourtsScreen() {
         visible={showScoreSheet && selectedCourt !== null}
         courtId={selectedCourt?.id ?? 0}
         players={selectedCourt?.players ?? []}
+        rated={selectedCourt?.gameMode !== 'nanta'}
         onSubmit={handleSubmitScore}
         onClose={() => setShowScoreSheet(false)}
       />

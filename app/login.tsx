@@ -23,6 +23,7 @@ import {
   type SavedLoginAccount,
 } from '@/src/services/quickLogin';
 import { SCHOOL_NAME, CLUB_NAME } from '@/src/constants';
+import { validateStudentId } from '@/src/utils/studentId';
 import { isSupabaseEnvConfigured, getSupabaseSetupHint } from '@/src/lib/supabaseEnv';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
 
@@ -71,7 +72,12 @@ export default function LoginScreen() {
   };
 
   const handleLogin = () => {
-    void completeLogin(studentId, password);
+    const idCheck = validateStudentId(studentId);
+    if (!idCheck.ok) {
+      showToast({ type: 'warning', title: '', message: idCheck.message });
+      return;
+    }
+    void completeLogin(idCheck.normalized, password);
   };
 
   const handleSavedLogin = () => {
@@ -88,12 +94,22 @@ export default function LoginScreen() {
   };
 
   const handleRegister = () => {
+    const idCheck = validateStudentId(studentId);
+    if (!idCheck.ok) {
+      showToast({ type: 'warning', title: '', message: idCheck.message });
+      return;
+    }
     if (password !== passwordConfirm) {
       showToast({ type: 'warning', title: '', message: '비밀번호 확인이 일치하지 않아요.' });
       return;
     }
     void (async () => {
-      const result = await register({ studentId, name, email, password });
+      const result = await register({
+        studentId: idCheck.normalized,
+        name,
+        email,
+        password,
+      });
       showToast({
         type: result.success ? 'success' : 'warning',
         title: '',
@@ -101,7 +117,7 @@ export default function LoginScreen() {
       });
       if (result.success) {
         setMode('login');
-        setStudentId(studentId.trim());
+        setStudentId(idCheck.normalized);
         setPassword('');
         setPasswordConfirm('');
         setShowSavedPrompt(false);
@@ -226,8 +242,9 @@ export default function LoginScreen() {
               style={styles.input}
               value={studentId}
               onChangeText={setStudentId}
-              placeholder="예: 20240001"
+              placeholder="예: 202410001"
               keyboardType="number-pad"
+              maxLength={9}
               autoCapitalize="none"
             />
 
@@ -283,7 +300,7 @@ export default function LoginScreen() {
               <Button title="로그인" onPress={handleLogin} fullWidth size="lg" style={styles.submit} />
             ) : (
               <Button
-                title="가입 신청"
+                title="회원가입"
                 onPress={handleRegister}
                 fullWidth
                 size="lg"
@@ -294,7 +311,7 @@ export default function LoginScreen() {
 
             {mode === 'register' && (
               <Text style={styles.hint}>
-                가입 후 운영진 승인이 필요합니다. 승인되면 웰컴 500P가 지급됩니다.
+                학번당 계정 1개만 만들 수 있어요. 가입 후 바로 로그인할 수 있습니다.
               </Text>
             )}
               </>

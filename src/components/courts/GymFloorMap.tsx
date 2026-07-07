@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Defs, Pattern, Rect, Line } from 'react-native-svg';
-import { COURT_COLUMNS, GYM_FLOOR, GYM_VENUE } from '@/src/constants/court';
+import { COURT_COLUMNS, GYM_FLOOR, GYM_VENUE, GYM_COURT_ROWS } from '@/src/constants/court';
 import { colors, typography } from '@/src/theme';
 
 const ROW_GUTTER = 2;
@@ -31,7 +31,8 @@ export function GymFloorMap({
   const rowUnit = cardChrome + courtWidth / (13.4 / 6.1);
   const stageH = 18;
   const aisleH = Math.max(6, courtGap * 0.85);
-  const floorH = stageH + rowUnit * 3 + aisleH * 2 + 8;
+  const totalRows = GYM_COURT_ROWS.length;
+  const floorH = stageH + rowUnit * totalRows + aisleH * (totalRows - 1) + 8;
 
   return (
     <View style={[styles.wrap, { width: floorW, height: floorH, pointerEvents: 'none' }]}>
@@ -76,7 +77,7 @@ export function GymFloorMap({
         })}
 
         {/* 통로 (행 사이) */}
-        {([0, 1] as const).map((i) => {
+        {Array.from({ length: totalRows - 1 }, (_, i) => i).map((i) => {
           const y = stageH + rowUnit * (i + 1) + aisleH * i + aisleH / 2;
           return (
             <Rect

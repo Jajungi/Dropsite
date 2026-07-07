@@ -1,6 +1,7 @@
 import { useWindowDimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCourtHeight } from '@/src/constants/court';
+import { GYM_COURT_ROWS } from '@/src/constants/court';
 import { WEB_BREAKPOINT } from '@/src/constants/nav';
 import { spacing } from '@/src/theme';
 import { useActivityStatus } from '@/src/hooks/useActivityStatus';
@@ -31,7 +32,7 @@ export function useLayoutMode() {
   const gridPanelWidth = width - sidebarWidth - panelPaddingHTotal;
 
   const courtColumns = 3;
-  const courtGap = isDesktop ? 8 : isNarrow ? 2 : 3;
+  const courtGap = isDesktop ? 8 : isNarrow ? 8 : 10;
   const gridPadding = 0;
 
   // 코트 바깥 여백 — 모바일에서는 최소화해 코트를 크게
@@ -72,12 +73,19 @@ export function useLayoutMode() {
     SHADOW_BLEED -
     (isMobile ? MOBILE_SCROLL_BUFFER : 0);
 
-  const rows = 3;
+  const rows = GYM_COURT_ROWS.length;
+  const coachingLinkHeight = 44; // 3번 코트 아래 코칭 링크 영역
   const rowGaps = courtGap * (rows - 1);
   const courtIllusHeight = getCourtHeight(courtWidth);
   const rowBlockHeight = courtIllusHeight + cardChrome;
   const gridContentHeight =
-    STAGE_LABEL_HEIGHT + rowBlockHeight * rows + rowGaps + GRID_BOTTOM_BUFFER + SHADOW_BLEED + 30;
+    STAGE_LABEL_HEIGHT +
+    rowBlockHeight * rows +
+    rowGaps +
+    coachingLinkHeight +
+    GRID_BOTTOM_BUFFER +
+    SHADOW_BLEED +
+    30;
 
   const gridContentWidth = gridPanelWidth;
 

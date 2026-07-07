@@ -35,7 +35,8 @@ const GRANT_PRESETS: { label: string; amount: number; type: PointTransactionType
   { label: '출석', amount: POINT_EARN.ATTENDANCE_FULL, type: 'check_in', desc: '출석 인증 (운영진)' },
   { label: '청소', amount: POINT_EARN.CLEANING, type: 'cleaning', desc: '청소·정리 인증 (운영진)' },
   { label: '네트', amount: POINT_EARN.NET_SETUP, type: 'net_setup', desc: '네트 설치·철거 (운영진)' },
-  { label: '랭크승', amount: POINT_EARN.RANKED_WIN, type: 'match_win', desc: '랭크전 승리 (운영진)' },
+  { label: '경기승', amount: POINT_EARN.MATCH_WIN, type: 'match_win', desc: '경기 승리 (운영진)' },
+  { label: '경기패', amount: POINT_EARN.MATCH_LOSS, type: 'match_loss', desc: '경기 참여 (운영진)' },
   { label: '회비', amount: POINT_EARN.CLUB_FEE, type: 'club_fee', desc: '동아리비 납부 인증 (운영진)' },
 ];
 
@@ -134,7 +135,7 @@ export function AdminPointsPanel({ adminId, onToast }: AdminPointsPanelProps) {
         <Text style={styles.policyText}>
           적립: 회비 +{POINT_EARN.CLUB_FEE} · 출석 정회원 +{POINT_EARN.ATTENDANCE_FULL}/준회원 +
           {POINT_EARN.ATTENDANCE_ASSOCIATE} · 청소 +{POINT_EARN.CLEANING} · 네트 +{POINT_EARN.NET_SETUP}{' '}
-          · 랭크승 +{POINT_EARN.RANKED_WIN}
+          · 경기승 +{POINT_EARN.MATCH_WIN}/패 +{POINT_EARN.MATCH_LOSS}
         </Text>
         <Text style={styles.policyText}>
           사용: 일반 코트 -{POINT_SPEND.COURT_GENERAL} · 중앙(4~6) -{POINT_SPEND.COURT_CENTER} · 셔틀콕 -

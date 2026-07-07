@@ -32,7 +32,7 @@ export function seedDemoAdminLogs(): AdminLogEntry[] {
       id: 'log-seed-3',
       category: 'match',
       action: 'match.confirm',
-      message: '코트 2 랭크전 결과 확정 (A 21:18 B)',
+      message: '코트 2 경기 결과 확정 (A 21:18 B)',
       actorId: 'user-6',
       actorName: '관리자',
       targetId: 'match-demo-1',

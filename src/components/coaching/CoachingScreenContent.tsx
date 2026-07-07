@@ -19,6 +19,7 @@ import { Card } from '@/src/components/ui/Card';
 import { Button } from '@/src/components/ui/Button';
 import { COACH_COURT_ID } from '@/src/constants/court';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
+import { canManageCoachAnnouncement, canPostCoachAnnouncement } from '@/src/utils/coachAccess';
 
 const QUEUE_STATUS: Record<string, string> = {
   waiting: '대기 중',
@@ -55,7 +56,7 @@ export function CoachingScreenContent() {
 
   const lessonStatus = currentUser.lessonStatus ?? 'none';
   const hasAccess = lessonStatus === 'approved';
-  const isAdmin = currentUser.membershipTier === 'admin';
+  const canPost = canPostCoachAnnouncement(currentUser);
   const queueEntry = getQueueEntry(currentUser.id);
   const activeQueue = lessonQueue.filter((e) => e.status !== 'done');
 
@@ -95,7 +96,7 @@ export function CoachingScreenContent() {
           <View key={a.id} style={styles.announceCard}>
             <View style={styles.announceTop}>
               <Text style={styles.announceTitle}>{a.title}</Text>
-              {isAdmin && (
+              {canManageCoachAnnouncement(currentUser, a.authorId) && (
                 <Pressable onPress={() => removeAnnouncement(a.id)} hitSlop={8}>
                   <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
                 </Pressable>
@@ -108,7 +109,7 @@ export function CoachingScreenContent() {
           </View>
         ))}
 
-        {isAdmin && (
+        {canPost && (
           <>
             {!showPostForm ? (
               <Button

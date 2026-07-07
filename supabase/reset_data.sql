@@ -27,7 +27,8 @@ begin;
     finished_at     = null,
     game_mode       = null,
     nanta_half      = null,
-    updated_at      = now();
+    updated_at      = now()
+  where id is not null;
 
   -- 2) 모든 활동/거래 데이터 삭제
   truncate table
@@ -51,7 +52,7 @@ begin;
   where id = 1;
 
   -- 4) 모든 인증 계정 삭제 → profiles로 CASCADE 삭제됨
-  delete from auth.users;
+  delete from auth.users where id is not null;
 
 commit;
 
@@ -76,7 +77,8 @@ commit;
 --     status = 'empty', players = '[]'::jsonb, join_requests = '[]'::jsonb,
 --     games_completed = 0, reserved_by = null, reserved_at = null,
 --     started_at = null, finished_at = null, game_mode = null,
---     nanta_half = null, updated_at = now();
+--     nanta_half = null, updated_at = now()
+--   where id is not null;
 --
 --   -- 2) 활동/거래 데이터 삭제
 --   truncate table
@@ -108,7 +110,8 @@ commit;
 --     scheduled_end          = null,
 --     lesson_status          = 'none',
 --     lesson_requested_at    = null,
---     updated_at             = now();
+--     updated_at             = now()
+--   where id is not null;
 --
 --   -- 4) 클럽 메타데이터 초기화
 --   update public.club_metadata set

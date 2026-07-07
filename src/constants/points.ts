@@ -6,8 +6,14 @@ export const POINT_EARN = {
   ATTENDANCE_ASSOCIATE: 100,
   CLEANING: 100,
   NET_SETUP: 100,
-  RANKED_WIN: 50,
+  /** 경기 승리 — 팀원당 고정 (승리 축하) */
+  MATCH_WIN: 50,
+  /** 경기 패배 — 팀원당 고정 (패배 위로, 승리보다 적게) */
+  MATCH_LOSS: 20,
 } as const;
+
+/** 점수를 입력하면 Elo·포인트가 바로 반영되지만, 하루 이 횟수를 넘으면 관리자 승인이 필요해요 */
+export const AUTO_RATED_MATCH_DAILY_LIMIT = 8;
 
 export const POINT_SPEND = {
   COURT_GENERAL: 20,
@@ -35,7 +41,8 @@ export const POINT_TYPE_LABELS: Record<string, string> = {
   check_in: '출석 인증',
   cleaning: '청소·정리',
   net_setup: '네트 설치·철거',
-  match_win: '랭크전 승리',
+  match_win: '경기 승리',
+  match_loss: '경기 참여',
   court_reserve: '코트 예약',
   shuttlecock: '셔틀콕 수령',
   welcome: '웰컴 리워드',

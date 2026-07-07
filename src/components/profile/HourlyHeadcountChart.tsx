@@ -9,9 +9,11 @@ interface HourlyHeadcountChartProps {
   /** 내가 참여한 시간대 (같은 shape, true면 해당 칸) */
   myPresence?: boolean[][];
   labels?: { x: string[]; y: string[] };
+  /** 셀 높이 — 세로로 더 길게 표시할 때 사용 */
+  cellHeight?: number;
 }
 
-export function HourlyHeadcountChart({ data, labels, myPresence }: HourlyHeadcountChartProps) {
+export function HourlyHeadcountChart({ data, labels, myPresence, cellHeight = 32 }: HourlyHeadcountChartProps) {
   const hasData = data && data.length > 0 && data.some((row) => row.some((v) => v > 0));
 
   if (!hasData || !labels) {
@@ -52,7 +54,7 @@ export function HourlyHeadcountChart({ data, labels, myPresence }: HourlyHeadcou
       <View style={styles.grid}>
         <View style={styles.yLabels}>
           {labels.y.map((label) => (
-            <Text key={label} style={styles.yLabel}>
+            <Text key={label} style={[styles.yLabel, { height: cellHeight, lineHeight: cellHeight }]}>
               {label}
             </Text>
           ))}
@@ -67,7 +69,7 @@ export function HourlyHeadcountChart({ data, labels, myPresence }: HourlyHeadcou
                     key={ci}
                     style={[
                       styles.cell,
-                      { backgroundColor: getCrowdColor(val) },
+                      { height: cellHeight, backgroundColor: getCrowdColor(val) },
                       mine && styles.cellMine,
                     ]}
                   >

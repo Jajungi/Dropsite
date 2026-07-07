@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   Platform,
+  Alert,
 } from 'react-native';
 import { useAuthStore } from '@/src/stores/authStore';
 import { useNotificationStore } from '@/src/stores/notificationStore';
@@ -19,9 +20,11 @@ import { RankBadge } from '@/src/components/ui/RankBadge';
 import { Button } from '@/src/components/ui/Button';
 import { Card } from '@/src/components/ui/Card';
 import { getEffectiveSchedule } from '@/src/utils/dateFormat';
+import { isGuestStudentId } from '@/src/utils/studentId';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
 import { POINT_EARN } from '@/src/constants/points';
-import type { MembershipTier, MemberStatus, User } from '@/src/types';
+import { RANK_THRESHOLDS, RANK_ORDER } from '@/src/constants';
+import type { MembershipTier, MemberStatus, RankTier, User } from '@/src/types';
 
 const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = {
   pending: '승인 대기',
@@ -67,13 +70,16 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
   const adminSetMembershipTier = useAuthStore((s) => s.adminSetMembershipTier);
   const adminSetMemberStatus = useAuthStore((s) => s.adminSetMemberStatus);
   const adminSetLessonStatus = useAuthStore((s) => s.adminSetLessonStatus);
+  const adminSetCoach = useAuthStore((s) => s.adminSetCoach);
   const adminAdjustPoints = useAuthStore((s) => s.adminAdjustPoints);
   const adminVerifyClubFee = useAuthStore((s) => s.adminVerifyClubFee);
   const adminRevokeClubFee = useAuthStore((s) => s.adminRevokeClubFee);
   const adminRevokeTransaction = usePointStore((s) => s.adminRevokeTransaction);
   const adminAdjustElo = useAuthStore((s) => s.adminAdjustElo);
+  const adminPlaceRank = useAuthStore((s) => s.adminPlaceRank);
   const adminSetAdminNote = useAuthStore((s) => s.adminSetAdminNote);
   const adminSendSystemNotice = useAuthStore((s) => s.adminSendSystemNotice);
+  const adminDeleteAccount = useAuthStore((s) => s.adminDeleteAccount);
   const pointTransactions = usePointStore((s) => s.transactions);
   const courts = useCourtStore((s) => s.courts);
   const getFriendIds = useFriendStore((s) => s.getFriendIds);
@@ -266,6 +272,37 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
                   notify(adminSetMemberStatus(selected.id, 'rejected', '운영진 판단'))
                 } />
               )}
+              {selected.id !== adminId && (
+                <Button
+                  title="계정 삭제"
+                  size="sm"
+                  variant="danger"
+                  onPress={() => {
+                    const isGuestAccount =
+                      selected.membershipTier === 'guest' || isGuestStudentId(selected.studentId);
+                    Alert.alert(
+                      '계정 삭제',
+                      isGuestAccount
+                        ? `${selected.name} 게스트 계정을 삭제할까요?`
+                        : `${selected.name} (${selected.studentId}) 계정을 삭제할까요? 같은 학번으로 다시 가입할 수 있어요.`,
+                      [
+                        { text: '취소', style: 'cancel' },
+                        {
+                          text: '삭제',
+                          style: 'destructive',
+                          onPress: () => {
+                            void (async () => {
+                              const result = await adminDeleteAccount(selected.id, adminId);
+                              onToast(result.success ? 'success' : 'warning', result.message);
+                              if (result.success) setSelectedId(null);
+                            })();
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                />
+              )}
             </View>
             {selected.memberStatus === 'approved' && (
               <TextInput
@@ -293,6 +330,24 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
               <Chip label="초기화" active={selected.lessonStatus === 'none'} onPress={() =>
                 notify(adminSetLessonStatus(selected.id, 'none'))
               } />
+            </View>
+          </Section>
+
+          <Section title="코치 권한">
+            <Text style={styles.sectionHint}>
+              코치 공지 작성 권한 · 현재: {selected.isCoach ? '코치' : '없음'}
+            </Text>
+            <View style={styles.chipRow}>
+              <Chip
+                label="코치 권한 부여"
+                active={!!selected.isCoach}
+                onPress={() => notify(adminSetCoach(selected.id, true))}
+              />
+              <Chip
+                label="권한 해제"
+                active={!selected.isCoach}
+                onPress={() => notify(adminSetCoach(selected.id, false))}
+              />
             </View>
           </Section>
 
@@ -360,6 +415,34 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
               <Button title="적용" size="sm" onPress={() =>
                 notify(adminAdjustElo(selected.id, parseInt(eloDelta, 10) || 0, eloReason))
               } />
+            </View>
+          </Section>
+
+          <Section title="시작 랭크 배치">
+            <Text style={styles.sectionHint}>
+              전반적인 실력에 맞춰 해당 랭크의 시작 점수로 Elo를 설정합니다. 배치 전 기본 시작
+              점수는 1000점(실버)입니다.
+            </Text>
+            <View style={styles.rankGrid}>
+              {RANK_ORDER.map((rank) => {
+                const active = selected.rank === rank;
+                return (
+                  <Pressable
+                    key={rank}
+                    onPress={() => notify(adminPlaceRank(selected.id, rank as RankTier))}
+                    style={[
+                      styles.rankChip,
+                      { borderColor: RANK_THRESHOLDS[rank].color },
+                      active && { backgroundColor: `${RANK_THRESHOLDS[rank].color}22` },
+                    ]}
+                  >
+                    <Text style={[styles.rankChipLabel, { color: RANK_THRESHOLDS[rank].color }]}>
+                      {RANK_THRESHOLDS[rank].label}
+                    </Text>
+                    <Text style={styles.rankChipElo}>{RANK_THRESHOLDS[rank].min}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </Section>
 
@@ -702,6 +785,18 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.primary },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   adjustRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  rankGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
+  rankChip: {
+    borderWidth: 1.5,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: 'center',
+    minWidth: 60,
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
+  },
+  rankChipLabel: { ...typography.caption, fontWeight: '700' },
+  rankChipElo: { ...typography.small, color: colors.textMuted, fontSize: 10 },
   input: {
     borderWidth: 1,
     borderColor: colors.border,

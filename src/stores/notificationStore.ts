@@ -5,7 +5,13 @@ import {
   MOCK_CLEANING_LEADERBOARD,
 } from '@/src/services/mockData';
 import { calculateEloChange } from '@/src/services/elo';
-import { calculateWinPoints, calculateCleaningPoints, calculateNetSetupPoints } from '@/src/services/points';
+import {
+  calculateWinPoints,
+  calculateLossPoints,
+  calculateCleaningPoints,
+  calculateNetSetupPoints,
+} from '@/src/services/points';
+import { AUTO_RATED_MATCH_DAILY_LIMIT } from '@/src/constants/points';
 import { useAuthStore } from './authStore';
 import { usePointStore } from './pointStore';
 import { applyPointChange, applyPointChangeLocalOnly } from '@/src/services/pointLedger';
@@ -42,6 +48,70 @@ function syncMatchStatsRemote(userIds: string[]) {
       );
     })
     .catch((err) => console.warn('[match] stats sync failed', err));
+}
+
+/** 난타(친선)를 제외한 '경기'만 Elo·전적 반영 대상 */
+function isRatedMode(gameMode?: GameMode): boolean {
+  return gameMode !== 'nanta';
+}
+
+/**
+ * 승/패에 따라 Elo·전적·포인트를 실제로 반영하고, 적용된 Elo 변동을 반환한다.
+ * (즉시 반영 경로와 관리자 승인 경로가 공유)
+ */
+function applyMatchOutcome(match: MatchResult, matchId: string): Record<string, number> {
+  const authStore = useAuthStore.getState();
+  const winners = match.winner === 'A' ? match.teamA : match.teamB;
+  const losers = match.winner === 'A' ? match.teamB : match.teamA;
+  const eloChanges: Record<string, number> = {};
+
+  const winPts = calculateWinPoints();
+  const lossPts = calculateLossPoints();
+
+  winners.forEach((userId) => {
+    const user = authStore.users.find((u) => u.id === userId);
+    if (!user) return;
+    const loserElos = losers.map((id) => authStore.users.find((u) => u.id === id)?.elo ?? 1000);
+    const avgLoserElo = loserElos.reduce((a, b) => a + b, 0) / (loserElos.length || 1);
+    const { winnerChange } = calculateEloChange(user.elo, avgLoserElo);
+    eloChanges[userId] = winnerChange;
+    authStore.updateUserElo(userId, winnerChange);
+    if (winPts > 0) {
+      applyPointChange(userId, winPts, 'match_win', '경기 승리 (팀원 지급)', { matchId });
+    }
+  });
+
+  losers.forEach((userId) => {
+    const user = authStore.users.find((u) => u.id === userId);
+    if (!user) return;
+    const winnerElos = winners.map((id) => authStore.users.find((u) => u.id === id)?.elo ?? 1000);
+    const avgWinnerElo = winnerElos.reduce((a, b) => a + b, 0) / (winnerElos.length || 1);
+    const { loserChange } = calculateEloChange(avgWinnerElo, user.elo);
+    eloChanges[userId] = loserChange;
+    authStore.updateUserElo(userId, loserChange);
+    if (lossPts > 0) {
+      applyPointChange(userId, lossPts, 'match_loss', '경기 참여 (위로 지급)', { matchId });
+    }
+  });
+
+  authStore.recordMatchStats(winners, losers);
+  return eloChanges;
+}
+
+/** 참가자 중 오늘 Elo가 반영된(확정) 경기 수의 최댓값 — 일일 한도 판단용 */
+function ratedMatchesTodayForUsers(history: MatchResult[], userIds: string[]): number {
+  const today = new Date().toDateString();
+  let max = 0;
+  for (const uid of userIds) {
+    let count = 0;
+    for (const m of history) {
+      if (m.status !== 'confirmed' || !m.eloChanges) continue;
+      if (new Date(m.playedAt).toDateString() !== today) continue;
+      if (m.teamA.includes(uid) || m.teamB.includes(uid)) count += 1;
+    }
+    if (count > max) max = count;
+  }
+  return max;
 }
 
 /** 경기 상태 변경(확정/취소/철회)을 Supabase 에 반영 (fire-and-forget) */
@@ -135,6 +205,18 @@ function revokeServiceSubmission(
   return { success: true, message: `${label}을 취소하고 포인트를 회수했어요.` };
 }
 
+/** 경기 결과 제출 결과 — 즉시 Elo 반영 / 친선 / 승인 대기 구분 */
+export interface MatchSubmitResult {
+  /** 결과가 기록되었는지 (동점 등으로 무시되면 false) */
+  recorded: boolean;
+  /** Elo 반영 대상 경기인지 (난타=false) */
+  rated: boolean;
+  /** Elo·포인트가 즉시 반영되었는지 */
+  applied: boolean;
+  /** 일일 한도 초과로 관리자 승인이 필요한지 */
+  requiresApproval: boolean;
+}
+
 interface NotificationState {
   toasts: ToastMessage[];
   siren: SirenAlert;
@@ -185,7 +267,7 @@ interface NotificationState {
     scoreA: number,
     scoreB: number,
     gameMode?: GameMode
-  ) => void;
+  ) => MatchSubmitResult;
   submitCleaning: (submission: Omit<CleaningSubmission, 'id' | 'submittedAt' | 'points'>) => void;
   submitNetSetup: (submission: Omit<CleaningSubmission, 'id' | 'submittedAt' | 'points' | 'kind'>) => void;
   submitShuttlecockCarry: (submission: Omit<CleaningSubmission, 'id' | 'submittedAt' | 'points' | 'kind'>) => void;
@@ -261,48 +343,18 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const match = get().pendingMatches.find((m) => m.id === matchId);
     if (!match) return;
 
-    const authStore = useAuthStore.getState();
     const winners = match.winner === 'A' ? match.teamA : match.teamB;
     const losers = match.winner === 'A' ? match.teamB : match.teamA;
 
-    const isRanked = match.gameMode === 'ranked';
-    const eloChanges: Record<string, number> = {};
-
-    winners.forEach((userId) => {
-      const user = authStore.users.find((u) => u.id === userId);
-      if (!user) return;
-      const loserElos = losers.map((id) => authStore.users.find((u) => u.id === id)?.elo ?? 1000);
-      const avgLoserElo = loserElos.reduce((a, b) => a + b, 0) / loserElos.length;
-      if (isRanked) {
-        const { winnerChange } = calculateEloChange(user.elo, avgLoserElo);
-        eloChanges[userId] = winnerChange;
-        authStore.updateUserElo(userId, winnerChange);
-        const pts = calculateWinPoints(true);
-        if (pts > 0) {
-          applyPointChange(userId, pts, 'match_win', '일반 랭킹전 승리 (팀원 지급)', { matchId });
-        }
-      }
-    });
-
-    if (isRanked) {
-      losers.forEach((userId) => {
-        const user = authStore.users.find((u) => u.id === userId);
-        if (!user) return;
-        const winnerElos = winners.map((id) => authStore.users.find((u) => u.id === id)?.elo ?? 1000);
-        const avgWinnerElo = winnerElos.reduce((a, b) => a + b, 0) / winnerElos.length;
-        const { loserChange } = calculateEloChange(avgWinnerElo, user.elo);
-        eloChanges[userId] = loserChange;
-        authStore.updateUserElo(userId, loserChange);
-      });
-      authStore.recordMatchStats(winners, losers);
-    }
+    const rated = isRatedMode(match.gameMode);
+    const eloChanges = rated ? applyMatchOutcome(match, matchId) : undefined;
 
     const confirmedAt = new Date().toISOString();
     const patch = {
       status: 'confirmed' as const,
       confirmedBy: adminId,
       confirmedAt,
-      eloChanges: isRanked ? eloChanges : undefined,
+      eloChanges,
     };
 
     set((state) => ({
@@ -314,7 +366,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       ),
     }));
     syncMatchPatchRemote(matchId, patch);
-    if (isRanked) syncMatchStatsRemote([...winners, ...losers]);
+    if (rated) syncMatchStatsRemote([...winners, ...losers]);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.confirm',
@@ -365,9 +417,9 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const authStore = useAuthStore.getState();
     const winners = match.winner === 'A' ? match.teamA : match.teamB;
     const losers = match.winner === 'A' ? match.teamB : match.teamA;
-    const isRanked = match.gameMode === 'ranked';
+    const rated = !!match.eloChanges;
 
-    if (isRanked && match.eloChanges) {
+    if (rated && match.eloChanges) {
       Object.entries(match.eloChanges).forEach(([userId, delta]) => {
         authStore.updateUserElo(userId, -delta);
       });
@@ -398,7 +450,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       ),
     }));
     syncMatchPatchRemote(matchId, patch);
-    if (isRanked) syncMatchStatsRemote([...winners, ...losers]);
+    if (rated) syncMatchStatsRemote([...winners, ...losers]);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.revoke',
@@ -452,22 +504,45 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   submitMatchResult: (courtId, teamA, teamB, scoreA, scoreB, gameMode = 'casual') => {
-    if (scoreA === scoreB) return;
+    if (scoreA === scoreB) {
+      return { recorded: false, rated: false, applied: false, requiresApproval: false };
+    }
     const winner: 'A' | 'B' = scoreA > scoreB ? 'A' : 'B';
+    const rated = isRatedMode(gameMode);
+    const matchId = `match-${Date.now()}`;
+    const playedAt = new Date().toISOString();
+
+    // 난타(친선)는 Elo 미반영으로 바로 확정 기록.
+    // 경기는 점수 입력 즉시 Elo 반영하되, 하루 한도를 넘으면 관리자 승인 대기로 전환.
+    const participants = [...teamA, ...teamB];
+    const overDailyLimit =
+      rated && ratedMatchesTodayForUsers(get().matchHistory, participants) >= AUTO_RATED_MATCH_DAILY_LIMIT;
+    const requiresApproval = rated && overDailyLimit;
+    const applyNow = rated && !overDailyLimit;
+
     const match: MatchResult = {
-      id: `match-${Date.now()}`,
+      id: matchId,
       courtId,
       teamA,
       teamB,
       scoreA,
       scoreB,
       winner,
-      status: 'pending',
-      playedAt: new Date().toISOString(),
+      status: requiresApproval ? 'pending' : 'confirmed',
+      playedAt,
       gameMode,
+      confirmedAt: requiresApproval ? undefined : playedAt,
+      // 자동 확정(승인 없이 반영)은 confirmedBy 를 비워 시스템 처리로 표시
+      confirmedBy: undefined,
     };
+
+    if (applyNow) {
+      match.eloChanges = applyMatchOutcome(match, matchId);
+    }
+
     set((state) => ({
-      pendingMatches: [match, ...state.pendingMatches],
+      // 승인이 필요한 경기만 관리자 대기 목록에 추가
+      pendingMatches: requiresApproval ? [match, ...state.pendingMatches] : state.pendingMatches,
       matchHistory: [match, ...state.matchHistory],
     }));
 
@@ -487,8 +562,11 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           })
         )
         .catch((err) => console.warn('[match] insert failed', err));
+      if (applyNow) syncMatchStatsRemote(participants);
     }
     persistAppState();
+
+    return { recorded: true, rated, applied: applyNow, requiresApproval };
   },
 
   submitCleaning: (submission) => {

@@ -400,10 +400,15 @@ export async function executeDbReset(scope: DbResetScope): Promise<{
     const { getSupabase } = await import('@/src/lib/supabase');
     const { data, error } = await getSupabase().rpc('rpc_admin_reset_data', { p_scope: scope });
     if (error) {
-      const hint =
-        error.message.includes('unknown reset scope') || error.message.includes('function')
-          ? ' Supabase SQL Editor에서 supabase/011_admin_db_reset.sql 을 실행했는지 확인하세요.'
-          : '';
+      const msg = (error.message ?? '').toLowerCase();
+      let hint = '';
+      if (msg.includes('unknown reset scope') || msg.includes('function')) {
+        hint = ' Supabase SQL Editor에서 supabase/014_db_safety_hardening.sql 을 실행했는지 확인하세요.';
+      } else if (msg.includes('where clause')) {
+        hint = ' supabase/014_db_safety_hardening.sql 을 다시 실행해 주세요.';
+      } else if (msg.includes('foreign key') || msg.includes('violates')) {
+        hint = ' supabase/014_db_safety_hardening.sql 을 실행하면 계정 삭제 FK 오류가 해결됩니다.';
+      }
       return { success: false, message: `${error.message}${hint}`, requiresLogout: false };
     }
 
@@ -427,6 +432,35 @@ export async function executeDbReset(scope: DbResetScope): Promise<{
   return {
     success: true,
     message: '로컬 데이터 리셋이 완료되었습니다.',
+    requiresLogout,
+    deletedUsers,
+  };
+}
+
+/** 여러 초기화 범위를 순차 실행. 'full'이 포함되면 full만 실행. */
+export async function executeDbResets(scopes: DbResetScope[]): Promise<{
+  success: boolean;
+  message: string;
+  requiresLogout: boolean;
+  deletedUsers: number;
+}> {
+  const targets = scopes.includes('full') ? (['full'] as DbResetScope[]) : scopes;
+
+  let deletedUsers = 0;
+  let requiresLogout = false;
+
+  for (const scope of targets) {
+    const result = await executeDbReset(scope);
+    if (!result.success) {
+      return { success: false, message: result.message, requiresLogout, deletedUsers };
+    }
+    deletedUsers += result.deletedUsers ?? 0;
+    if (result.requiresLogout) requiresLogout = true;
+  }
+
+  return {
+    success: true,
+    message: '선택한 데이터 초기화가 완료되었습니다.',
     requiresLogout,
     deletedUsers,
   };

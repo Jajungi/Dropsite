@@ -192,7 +192,7 @@ export function createMockCourts(): Court[] {
   courts[0] = {
     ...courts[0],
     status: 'playing',
-    gameMode: 'ranked',
+    gameMode: 'casual',
     maxGames: 3,
     players: [
       { userId: 'user-1', name: '김민준', nickname: '김민준', rank: 'gold', avatarColor: pickAvatarColor(0) },
@@ -498,7 +498,7 @@ export const MOCK_POINT_TRANSACTIONS: PointTransaction[] = [
     userId: 'user-1',
     amount: 12,
     type: 'match_win',
-    description: '랭킹전 승리 (관리자 확정)',
+    description: '경기 승리',
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
     meta: { matchId: 'match-3' },
   },

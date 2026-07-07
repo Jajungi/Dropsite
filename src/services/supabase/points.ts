@@ -20,6 +20,7 @@ const APP_TO_DB_KIND: Record<PointTransactionType, DbPointKind> = {
   check_in: 'attendance',
   court_reserve: 'court',
   match_win: 'ranked_win',
+  match_loss: 'bonus',
   cleaning: 'cleaning',
   net_setup: 'net_setup',
   club_fee: 'club_fee',

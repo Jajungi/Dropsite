@@ -5,6 +5,7 @@ import { CourtCard } from './CourtCard';
 import { LightShadowCapture } from '@/src/components/ui/LightShadowView';
 import { SoftEdgeFade } from '@/src/components/ui/SoftEdgeFade';
 import { GymFloorMap } from '@/src/components/courts/GymFloorMap';
+import { CoachingEntryLink } from '@/src/components/coaching/CoachingEntryLink';
 import { GYM_COURT_ROWS, GYM_VENUE } from '@/src/constants/court';
 import { useLayoutMode } from '@/src/hooks/useLayoutMode';
 import { colors, typography, spacing } from '@/src/theme';
@@ -16,6 +17,7 @@ interface CourtGridProps {
   filter?: 'all' | 'empty' | 'mine';
   myUserId?: string;
   registerCourtRef?: (id: number, ref: View | null) => void;
+  showCoachingLink?: boolean;
 }
 
 function getCourtById(courts: Court[], id: number): Court | undefined {
@@ -37,6 +39,7 @@ export function CourtGrid({
   filter = 'all',
   myUserId,
   registerCourtRef,
+  showCoachingLink = false,
 }: CourtGridProps) {
   const {
     courtWidth,
@@ -71,9 +74,9 @@ export function CourtGrid({
             {GYM_COURT_ROWS.map((row, rowIdx) => (
               <View
                 key={rowIdx}
-                style={[styles.rowWrap, { marginBottom: rowIdx < 2 ? courtGap : 0 }]}
+                style={[styles.rowWrap, { marginBottom: courtGap }]}
               >
-                {rowIdx === 2 ? (
+                {rowIdx === GYM_COURT_ROWS.length - 1 ? (
                   <View style={[styles.entranceCol, { width: entranceGutter }]}>
                     <Text style={styles.entranceLabel}>{GYM_VENUE.entranceLabel}</Text>
                     <Text style={styles.entranceArrow}>▼</Text>
@@ -110,6 +113,16 @@ export function CourtGrid({
                 </View>
               </View>
             ))}
+
+            {/* 코칭·레슨·공지 링크 — 3번 코트(좌측 하단) 아래 */}
+            {showCoachingLink && (
+              <View style={styles.coachingRow}>
+                <View style={[styles.entranceSpacer, { width: entranceGutter }]} />
+                <View style={styles.coachingLinkArea}>
+                  <CoachingEntryLink />
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </SoftEdgeFade>
@@ -163,5 +176,16 @@ const styles = StyleSheet.create({
   courtSlot: {
     flexShrink: 1,
     minWidth: 0,
+  },
+  coachingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 2,
+    width: '100%',
+    zIndex: 1,
+  },
+  coachingLinkArea: {
+    flex: 1,
+    alignItems: 'flex-start',
   },
 });
