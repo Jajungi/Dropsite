@@ -1,0 +1,85 @@
+import { useCallback, useMemo } from 'react';
+import type { FriendRequest } from '@/src/types';
+import { useAuthStore } from '@/src/stores/authStore';
+import { useFriendStore, type FriendState } from '@/src/stores/friendStore';
+import { ACTIVITY_SCHEDULE } from '@/src/constants';
+import { buildFriendGroups, sortByScheduledArrival } from '@/src/utils/friendsPresence';
+
+const EMPTY_FRIEND_IDS: string[] = [];
+const EMPTY_REQUESTS: FriendRequest[] = [];
+
+function getTodaySession() {
+  const day = new Date().getDay();
+  return ACTIVITY_SCHEDULE.find((s) => s.day === day) ?? ACTIVITY_SCHEDULE[0];
+}
+
+function pad(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+function filterIncoming(requests: FriendRequest[], userId: string): FriendRequest[] {
+  return requests
+    .filter((r) => r.status === 'pending' && r.toUserId === userId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+function filterOutgoing(requests: FriendRequest[], userId: string): FriendRequest[] {
+  return requests
+    .filter((r) => r.status === 'pending' && r.fromUserId === userId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function useFriendsPresence() {
+  const currentUserId = useAuthStore((s) => s.currentUser?.id ?? null);
+  const users = useAuthStore((s) => s.users);
+  const attendanceRecords = useAuthStore((s) => s.attendanceRecords);
+
+  const friendIdsSelector = useCallback(
+    (s: FriendState) =>
+      currentUserId ? s.friendships[currentUserId] ?? EMPTY_FRIEND_IDS : EMPTY_FRIEND_IDS,
+    [currentUserId]
+  );
+  const friendIds = useFriendStore(friendIdsSelector);
+  const friendRequests = useFriendStore((s) => s.friendRequests);
+
+  const incomingRequests = useMemo(() => {
+    if (!currentUserId) return EMPTY_REQUESTS;
+    return filterIncoming(friendRequests, currentUserId);
+  }, [friendRequests, currentUserId]);
+
+  const outgoingRequests = useMemo(() => {
+    if (!currentUserId) return EMPTY_REQUESTS;
+    return filterOutgoing(friendRequests, currentUserId);
+  }, [friendRequests, currentUserId]);
+
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const session = getTodaySession();
+  const activityStart = `${pad(session.startHour)}:${pad(session.startMinute)}`;
+  const activityEnd = `${pad(session.endHour)}:${pad(session.endMinute)}`;
+
+  const groups = useMemo(
+    () => buildFriendGroups(users, currentUserId ?? undefined, attendanceRecords, today, friendIds),
+    [users, currentUserId, attendanceRecords, today, friendIds]
+  );
+
+  const allFriends = useMemo(() => {
+    const idSet = new Set(friendIds);
+    const list = users.filter(
+      (u) => u.id !== currentUserId && idSet.has(u.id) && u.memberStatus === 'approved'
+    );
+    return sortByScheduledArrival(list);
+  }, [users, currentUserId, friendIds]);
+
+  return useMemo(
+    () => ({
+      ...groups,
+      allFriends,
+      incomingRequests,
+      outgoingRequests,
+      activityStart,
+      activityEnd,
+      today,
+    }),
+    [groups, allFriends, incomingRequests, outgoingRequests, activityStart, activityEnd, today]
+  );
+}

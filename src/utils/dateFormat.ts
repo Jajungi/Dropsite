@@ -1,0 +1,29 @@
+const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+export function getTodayKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** 예: 2026년 7월 7일 (화) */
+export function formatTodayLabel(date = new Date()): string {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const day = DAY_LABELS[date.getDay()];
+  return `${y}년 ${m}월 ${d}일 (${day})`;
+}
+
+export function isScheduleForToday(scheduleDate?: string, today = getTodayKey()): boolean {
+  if (!scheduleDate) return true;
+  return scheduleDate === today;
+}
+
+export function getEffectiveSchedule(user: {
+  scheduleDate?: string;
+  scheduledStart?: string;
+  scheduledEnd?: string;
+}): { start?: string; end?: string } {
+  if (!user.scheduledStart) return {};
+  if (user.scheduleDate && !isScheduleForToday(user.scheduleDate)) return {};
+  return { start: user.scheduledStart, end: user.scheduledEnd };
+}

@@ -1,0 +1,154 @@
+import React from 'react';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { router, type Href } from 'expo-router';
+import type { FriendRequest } from '@/src/types';
+import { Avatar } from '@/src/components/ui/Avatar';
+import { useAuthStore } from '@/src/stores/authStore';
+import { useFriendStore } from '@/src/stores/friendStore';
+import { useNotificationStore } from '@/src/stores/notificationStore';
+import { colors, spacing, typography, borderRadius, shadows } from '@/src/theme';
+
+interface FriendRequestsPanelProps {
+  incoming: FriendRequest[];
+  outgoing: FriendRequest[];
+}
+
+export function FriendRequestsPanel({ incoming, outgoing }: FriendRequestsPanelProps) {
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const users = useAuthStore((s) => s.users);
+  const acceptFriendRequest = useFriendStore((s) => s.acceptFriendRequest);
+  const rejectFriendRequest = useFriendStore((s) => s.rejectFriendRequest);
+  const cancelFriendRequest = useFriendStore((s) => s.cancelFriendRequest);
+  const showToast = useNotificationStore((s) => s.showToast);
+
+  if (!currentUser) return null;
+  if (incoming.length === 0 && outgoing.length === 0) return null;
+
+  const notify = (result: { success: boolean; message: string }) => {
+    showToast({ type: result.success ? 'success' : 'info', title: '', message: result.message });
+  };
+
+  const avatarFor = (userId: string, fallbackName: string) => {
+    const u = users.find((x) => x.id === userId);
+    return { name: u?.name ?? fallbackName, color: u?.avatarColor ?? colors.primary };
+  };
+
+  return (
+    <View style={styles.wrap}>
+      {incoming.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.title}>받은 친구 신청 ({incoming.length})</Text>
+          <View style={styles.card}>
+            {incoming.map((req, i) => {
+              const av = avatarFor(req.fromUserId, req.fromUserName);
+              return (
+                <View key={req.id}>
+                  {i > 0 && <View style={styles.divider} />}
+                  <View style={styles.row}>
+                    <Pressable
+                      onPress={() => router.push(`/user/${req.fromUserId}` as Href)}
+                      style={styles.rowMain}
+                    >
+                      <Avatar name={av.name} color={av.color} size={40} />
+                      <View style={styles.body}>
+                        <Text style={styles.name}>{req.fromUserName}</Text>
+                        <Text style={styles.sub}>친구 신청을 보냈어요</Text>
+                      </View>
+                    </Pressable>
+                    <View style={styles.actions}>
+                      <Pressable
+                        onPress={() => notify(acceptFriendRequest(req.id, currentUser.id))}
+                        style={[styles.btn, styles.accept]}
+                      >
+                        <Text style={styles.btnTextLight}>수락</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => notify(rejectFriendRequest(req.id, currentUser.id))}
+                        style={[styles.btn, styles.reject]}
+                      >
+                        <Text style={styles.btnTextMuted}>거절</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {outgoing.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.title}>보낸 친구 신청 ({outgoing.length})</Text>
+          <View style={styles.card}>
+            {outgoing.map((req, i) => (
+              <View key={req.id}>
+                {i > 0 && <View style={styles.divider} />}
+                <View style={styles.row}>
+                  <View style={styles.body}>
+                    <Text style={styles.name}>{req.toUserName}</Text>
+                    <Text style={styles.sub}>응답 대기 중</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => notify(cancelFriendRequest(req.id, currentUser.id))}
+                    style={[styles.btn, styles.reject]}
+                  >
+                    <Text style={styles.btnTextMuted}>취소</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { gap: spacing.md, marginBottom: spacing.md },
+  section: { gap: spacing.sm },
+  title: { ...typography.label, color: colors.text, fontWeight: '700', paddingHorizontal: spacing.xs },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.sm,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
+  },
+  body: { flex: 1, gap: 2 },
+  name: { ...typography.bodyBold, color: colors.text },
+  sub: { ...typography.caption, color: colors.textMuted },
+  actions: { flexDirection: 'row', gap: spacing.xs },
+  btn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: borderRadius.sm,
+    ...Platform.select({ web: { cursor: 'pointer' as const } }),
+  },
+  accept: { backgroundColor: colors.primary },
+  reject: {
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  btnTextLight: { ...typography.small, color: colors.textLight, fontWeight: '700' },
+  btnTextMuted: { ...typography.small, color: colors.textSecondary, fontWeight: '600' },
+  divider: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginHorizontal: spacing.md,
+  },
+});

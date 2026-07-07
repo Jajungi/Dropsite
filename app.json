@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "DI GIST 배드민턴",
+    "slug": "badmin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "badmin",
+    "userInterfaceStyle": "light",
+    "description": "DI GIST 배드민턴 동아리 통합 예약 및 매칭 시스템",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "kr.ac.dgist.badmin",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "체육관 현장 인증을 위해 위치 정보가 필요합니다.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "체육관 현장 인증을 위해 위치 정보가 필요합니다."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1B4332",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "package": "kr.ac.dgist.badmin",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "VIBRATE",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "name": "DI GIST 배드민턴",
+      "shortName": "배드민턴",
+      "description": "설치 없이 바로 쓰는 배드민턴 동아리 예약 앱",
+      "themeColor": "#3182F6",
+      "backgroundColor": "#F2F4F6",
+      "display": "standalone",
+      "startUrl": "/",
+      "lang": "ko"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1B4332"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "체육관 현장 인증(500m 이내)을 위해 위치 정보가 필요합니다."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "프로필 사진을 설정하기 위해 사진 접근이 필요합니다.",
+          "cameraPermission": "프로필 사진 촬영을 위해 카메라 접근이 필요합니다."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#3182F6"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

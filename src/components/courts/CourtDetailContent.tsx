@@ -1,0 +1,330 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import type { Court, GameMode, NantaHalf } from '@/src/types';
+import { CourtIllustration } from './CourtIllustration';
+import { CourtPlayerProfiles } from './CourtPlayerProfiles';
+import { COURT_FLOOR_COLORS, getCourtHeight, GAME_COUNT_OPTIONS, GAME_MODE_CONFIG, getCourtColumnLabel, GYM_VENUE } from '@/src/constants/court';
+import { formatCleanupRemaining, formatElapsed } from '@/src/utils/courtTime';
+import { GameCountPicker } from './GameCountPicker';
+import { GameModePicker } from './GameModePicker';
+import { GameModeBadge } from './GameModeBadge';
+import { Avatar } from '@/src/components/ui/Avatar';
+import { RankBadge } from '@/src/components/ui/RankBadge';
+import { Button } from '@/src/components/ui/Button';
+import { colors, borderRadius, spacing, typography } from '@/src/theme';
+
+export interface CourtDetailContentProps {
+  court: Court;
+  onReserve: (gameCount: number, gameMode: GameMode, nantaHalf?: NantaHalf) => void;
+  onJoin: () => void;
+  onCompleteGame: () => void;
+  onReturnCourt: () => void;
+  onStartGame: () => void;
+  onAcceptJoin: (requestId: string) => void;
+  onRejectJoin: (requestId: string) => void;
+  onRecordScore: () => void;
+  isCurrentUserOnCourt: boolean;
+  isHost: boolean;
+  canPerformActions: boolean;
+  courtPreviewWidth?: number;
+  hideCourtPreview?: boolean;
+  embedded?: boolean;
+}
+
+const STATUS_LABEL: Record<Court['status'], string> = {
+  empty: '예약 가능',
+  reserved: '예약됨',
+  playing: '경기 중',
+  just_finished: '반납 대기',
+};
+
+export function CourtDetailContent({
+  court,
+  onReserve,
+  onJoin,
+  onCompleteGame,
+  onReturnCourt,
+  onStartGame,
+  onAcceptJoin,
+  onRejectJoin,
+  onRecordScore,
+  isCurrentUserOnCourt,
+  isHost,
+  canPerformActions,
+  courtPreviewWidth = 300,
+  hideCourtPreview = false,
+  embedded = false,
+}: CourtDetailContentProps) {
+  const [gameCount, setGameCount] = useState<number>(GAME_COUNT_OPTIONS[1]);
+  const [gameMode, setGameMode] = useState<GameMode>('casual');
+  const [nantaHalf, setNantaHalf] = useState<NantaHalf>('near');
+
+  useEffect(() => {
+    setGameCount(GAME_COUNT_OPTIONS[1]);
+    setGameMode('casual');
+    setNantaHalf('near');
+  }, [court.id]);
+
+  const canJoin = court.status === 'playing' && court.players.length >= 2 && court.players.length < 4;
+  const floorColor = COURT_FLOOR_COLORS[court.status];
+  const previewH = getCourtHeight(courtPreviewWidth);
+  const colLabel = getCourtColumnLabel(court.id);
+  const elapsed = formatElapsed(court.startedAt);
+  const cleanupLeft = formatCleanupRemaining(court.finishedAt);
+  const courtMeta = [
+    GYM_VENUE.shortName,
+    colLabel,
+    court.isCenter ? '센터 코트' : null,
+    court.isCoachCourt ? '코치 코트' : null,
+    GYM_VENUE.floorMaterial,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const actionsBlock = (
+    <View style={[styles.actions, embedded && styles.actionsEmbedded]}>
+      {!canPerformActions && (
+        <Text style={styles.warningText}>체육관 근처에서만 예약·이용할 수 있어요</Text>
+      )}
+
+      {court.status === 'reserved' && isCurrentUserOnCourt && canPerformActions && (
+        <Button
+          title={`게임 시작 (${court.players.length}명)`}
+          onPress={onStartGame}
+          fullWidth
+          size="lg"
+        />
+      )}
+
+      {canJoin && !isCurrentUserOnCourt && canPerformActions && (
+        <Button title="빈자리 합류 신청" onPress={onJoin} fullWidth size="lg" variant="outline" />
+      )}
+
+      {court.status === 'playing' && isCurrentUserOnCourt && canPerformActions && (
+        <>
+          <Button title="게임 1판 완료" onPress={onCompleteGame} fullWidth size="lg" />
+          <Button title="코트 반납" onPress={onReturnCourt} fullWidth size="md" variant="ghost" style={{ marginTop: spacing.sm }} />
+        </>
+      )}
+
+      {court.status === 'just_finished' && isCurrentUserOnCourt && canPerformActions && (
+        <>
+          <Button title="코트 반납" onPress={onReturnCourt} fullWidth size="lg" />
+          <Button title="결과 기록 (선택)" onPress={onRecordScore} fullWidth size="sm" variant="ghost" style={{ marginTop: spacing.sm }} />
+        </>
+      )}
+    </View>
+  );
+
+  return (
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.scrollContent, embedded && styles.scrollContentEmbedded]}
+      keyboardShouldPersistTaps="handled"
+    >
+      {!hideCourtPreview && (
+        <View style={styles.header}>
+          <Text style={styles.title}>{court.id}번 코트</Text>
+          <Text style={styles.courtMeta}>{courtMeta}</Text>
+          <View style={styles.statusRow}>
+          <View style={[styles.statusDot, { backgroundColor: floorColor }]} />
+          <Text style={styles.status}>{STATUS_LABEL[court.status]}</Text>
+          {court.maxGames > 0 && court.status !== 'empty' && (
+            <Text style={styles.gameMeta}>· {court.maxGames}게임</Text>
+          )}
+          {elapsed && court.status === 'playing' && (
+            <Text style={styles.gameMeta}>· {elapsed}</Text>
+          )}
+          {cleanupLeft && court.status === 'just_finished' && (
+            <Text style={styles.gameMeta}>· {cleanupLeft}</Text>
+          )}
+          {court.gameMode && court.status !== 'empty' && (
+            <View style={styles.modeBadgeInline}>
+              <GameModeBadge mode={court.gameMode} nantaHalf={court.nantaHalf} />
+            </View>
+          )}
+        </View>
+          {court.isCoachCourt && <Text style={styles.tag}>코치 코트</Text>}
+        </View>
+      )}
+
+      {hideCourtPreview && (
+        <View style={[styles.compactStatus, embedded && styles.compactStatusEmbedded]}>
+          <View style={[styles.statusDot, { backgroundColor: floorColor }]} />
+          <Text style={styles.status}>{STATUS_LABEL[court.status]}</Text>
+          {court.maxGames > 0 && court.status !== 'empty' && (
+            <Text style={styles.gameMeta}>· {court.maxGames}게임</Text>
+          )}
+          {court.gameMode && court.status !== 'empty' && (
+            <GameModeBadge mode={court.gameMode} nantaHalf={court.nantaHalf} compact />
+          )}
+          {court.isCoachCourt && <Text style={styles.tag}>· 코치 코트</Text>}
+        </View>
+      )}
+
+      {!hideCourtPreview && (
+      <View style={styles.courtPreview}>
+        <View style={{ width: courtPreviewWidth, height: previewH, position: 'relative' }}>
+          <CourtIllustration court={court} width={courtPreviewWidth} />
+          <CourtPlayerProfiles
+            players={court.players}
+            avatarSize={28}
+            courtWidth={courtPreviewWidth}
+            courtHeight={previewH}
+          />
+        </View>
+      </View>
+      )}
+
+      {court.status === 'empty' && canPerformActions && (
+        <View style={[styles.reserveBlock, embedded && styles.reserveBlockEmbedded]}>
+          <Text style={styles.blockTitle}>경기 유형</Text>
+          <GameModePicker
+            value={gameMode}
+            nantaHalf={nantaHalf}
+            onChange={setGameMode}
+            onNantaHalfChange={setNantaHalf}
+          />
+          <Text style={[styles.blockTitle, { marginTop: spacing.sm }]}>게임 수</Text>
+          <GameCountPicker value={gameCount} onChange={setGameCount} />
+          <Button
+            title={`${gameCount}게임 예약하기`}
+            onPress={() => onReserve(gameCount, gameMode, gameMode === 'nanta' ? nantaHalf : undefined)}
+            fullWidth
+            size="lg"
+          />
+        </View>
+      )}
+
+      {court.status === 'reserved' && (
+        <View style={[styles.infoBlock, embedded && styles.infoBlockEmbedded]}>
+          <Text style={styles.infoLine}>
+            <Text style={styles.infoBold}>
+              {court.gameMode ? GAME_MODE_CONFIG[court.gameMode].label : '경기'}
+            </Text>
+            {' · '}
+            <Text style={styles.infoBold}>{court.maxGames}게임</Text> 예약됨
+          </Text>
+          <Text style={styles.infoSub}>참가 {court.players.length}명 · 게임 시작 전</Text>
+        </View>
+      )}
+
+      {court.status === 'playing' && court.maxGames > 0 && (
+        <View style={[styles.infoBlock, embedded && styles.infoBlockEmbedded]}>
+          <Text style={styles.infoLine}>
+            {court.gameMode && (
+              <Text style={styles.infoBold}>{GAME_MODE_CONFIG[court.gameMode].label} · </Text>
+            )}
+            진행 <Text style={styles.infoBold}>{court.gamesCompleted}/{court.maxGames}</Text> 게임
+          </Text>
+        </View>
+      )}
+
+      {embedded && actionsBlock}
+
+      {court.players.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>참가자 {court.players.length}/4</Text>
+          {court.players.map((p) => (
+            <View key={p.userId} style={styles.playerRow}>
+              <Avatar name={p.name} color={p.avatarColor} size={36} />
+              <Text style={styles.playerName}>{p.name}</Text>
+              <RankBadge rank={p.rank} size="sm" />
+            </View>
+          ))}
+        </View>
+      )}
+
+      {court.joinRequests.length > 0 && isHost && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>합류 신청</Text>
+          {court.joinRequests.map((req) => (
+            <View key={req.id} style={styles.requestRow}>
+              <Text style={styles.playerName}>{req.userName}</Text>
+              <View style={styles.requestActions}>
+                <Button title="수락" onPress={() => onAcceptJoin(req.id)} size="sm" />
+                <Button title="거절" onPress={() => onRejectJoin(req.id)} size="sm" variant="ghost" />
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {!embedded && actionsBlock}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  scroll: { flex: 1 },
+  scrollContent: { padding: spacing.lg, paddingBottom: spacing.xxl },
+  scrollContentEmbedded: { padding: spacing.md, paddingBottom: spacing.xl },
+  header: { marginBottom: spacing.md },
+  compactStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+  },
+  compactStatusEmbedded: { marginBottom: spacing.sm },
+  title: { ...typography.h2, color: colors.text },
+  courtMeta: {
+    ...typography.small,
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: spacing.xs,
+  },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  status: { ...typography.caption, color: colors.textSecondary },
+  gameMeta: { ...typography.caption, color: colors.textMuted },
+  modeBadgeInline: { marginLeft: 4 },
+  tag: { ...typography.small, color: colors.primary, marginTop: 4 },
+  courtPreview: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
+  },
+  reserveBlock: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  reserveBlockEmbedded: { marginBottom: spacing.sm, padding: spacing.sm },
+  blockTitle: { ...typography.bodyBold, color: colors.text },
+  infoBlock: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  infoBlockEmbedded: { marginBottom: spacing.sm, padding: spacing.sm },
+  infoLine: { ...typography.body, color: colors.text },
+  infoBold: { fontFamily: typography.bodyBold.fontFamily, color: colors.primary },
+  infoSub: { ...typography.caption, color: colors.textMuted, marginTop: 4 },
+  section: { marginBottom: spacing.md },
+  sectionTitle: { ...typography.label, color: colors.textMuted, marginBottom: spacing.sm },
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  playerName: { ...typography.bodyBold, color: colors.text, flex: 1 },
+  requestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  requestActions: { flexDirection: 'row', gap: 4 },
+  actions: { marginTop: spacing.sm, gap: spacing.sm },
+  actionsEmbedded: { marginTop: 0, marginBottom: spacing.sm },
+  warningText: { ...typography.caption, color: colors.warning, textAlign: 'center', marginBottom: spacing.sm },
+});

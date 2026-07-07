@@ -1,0 +1,170 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Svg, { Defs, Pattern, Rect, Line } from 'react-native-svg';
+import { COURT_COLUMNS, GYM_FLOOR, GYM_VENUE } from '@/src/constants/court';
+import { colors, typography } from '@/src/theme';
+
+const ENTRANCE_GUTTER = 18;
+const ROW_GUTTER = 2;
+
+interface GymFloorMapProps {
+  courtWidth: number;
+  courtGap: number;
+  /** 전체 그리드 가로 폭 (패널 맞춤) */
+  floorWidth?: number;
+  /** CourtCard wrapper chrome (paddingTop 14 + paddingBottom 3) */
+  cardChrome?: number;
+}
+
+export function GymFloorMap({
+  courtWidth,
+  courtGap,
+  floorWidth,
+  cardChrome = 17,
+}: GymFloorMapProps) {
+  const colUnit = courtWidth + courtGap;
+  const floorW =
+    floorWidth ?? ENTRANCE_GUTTER + ROW_GUTTER + colUnit * 3 - courtGap;
+  const rowUnit = cardChrome + courtWidth / (13.4 / 6.1);
+  const stageH = 18;
+  const aisleH = Math.max(6, courtGap * 0.85);
+  const floorH = stageH + rowUnit * 3 + aisleH * 2 + 8;
+
+  return (
+    <View style={[styles.wrap, { width: floorW, height: floorH }]} pointerEvents="none">
+      <Svg width={floorW} height={floorH} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <Pattern id="gym-floor-stripe" patternUnits="userSpaceOnUse" width={8} height={8}>
+            <Rect width={8} height={8} fill={GYM_FLOOR.base} />
+            <Line x1={0} y1={8} x2={8} y2={0} stroke={GYM_FLOOR.stripe} strokeWidth={0.6} />
+          </Pattern>
+        </Defs>
+
+        <Rect x={0} y={0} width={floorW} height={floorH} rx={14} ry={14} fill="url(#gym-floor-stripe)" />
+
+        {/* 무대측 구역 */}
+        <Rect x={0} y={0} width={floorW} height={stageH} rx={14} fill={GYM_FLOOR.stage} opacity={0.55} />
+
+        {/* 입구측 구역 */}
+        <Rect
+          x={0}
+          y={floorH - 10}
+          width={floorW}
+          height={10}
+          fill={GYM_FLOOR.entrance}
+          opacity={0.45}
+        />
+
+        {/* 열 구분선 */}
+        {([1, 2] as const).map((i) => {
+          const x = ENTRANCE_GUTTER + ROW_GUTTER + colUnit * i - courtGap / 2;
+          return (
+            <Line
+              key={i}
+              x1={x}
+              y1={stageH + 4}
+              x2={x}
+              y2={floorH - 8}
+              stroke={GYM_FLOOR.divider}
+              strokeWidth={1}
+              strokeDasharray="4 5"
+            />
+          );
+        })}
+
+        {/* 통로 (행 사이) */}
+        {([0, 1] as const).map((i) => {
+          const y = stageH + rowUnit * (i + 1) + aisleH * i + aisleH / 2;
+          return (
+            <Rect
+              key={`aisle-${i}`}
+              x={ENTRANCE_GUTTER + ROW_GUTTER}
+              y={y - aisleH / 2}
+              width={colUnit * 3 - courtGap}
+              height={aisleH}
+              fill={GYM_FLOOR.aisle}
+              opacity={0.65}
+              rx={3}
+            />
+          );
+        })}
+      </Svg>
+
+      <View style={[styles.stageBand, { width: floorW, height: stageH }]}>
+        <Text style={styles.stageText}>▲ {GYM_VENUE.stageLabel}</Text>
+        <Text style={styles.venueHint}>{GYM_VENUE.shortName}</Text>
+      </View>
+
+      <View
+        style={[
+          styles.colHeaders,
+          {
+            top: stageH + 2,
+            left: ENTRANCE_GUTTER + ROW_GUTTER,
+            width: colUnit * 3 - courtGap,
+          },
+        ]}
+      >
+        {COURT_COLUMNS.map((col, i) => (
+          <View key={col.key} style={[styles.colHeader, { width: courtWidth, marginRight: i < 2 ? courtGap : 0 }]}>
+            <Text style={styles.colLabel}>{col.label}</Text>
+            <Text style={styles.colSub}>{col.sublabel}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    top: 0,
+    alignSelf: 'center',
+    zIndex: 0,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  stageBand: {
+    position: 'absolute',
+    top: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  stageText: {
+    ...typography.small,
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textMuted,
+    letterSpacing: 0.4,
+  },
+  venueHint: {
+    ...typography.small,
+    fontSize: 8,
+    color: colors.textMuted,
+    opacity: 0.75,
+  },
+  colHeaders: {
+    position: 'absolute',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  colHeader: {
+    alignItems: 'center',
+  },
+  colLabel: {
+    ...typography.small,
+    fontSize: 8,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  colSub: {
+    ...typography.small,
+    fontSize: 7,
+    color: colors.textMuted,
+    opacity: 0.7,
+    marginTop: 1,
+  },
+});
