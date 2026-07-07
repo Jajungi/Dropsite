@@ -10,6 +10,7 @@ import {
   DMSans_500Medium,
   DMSans_600SemiBold,
 } from '@expo-google-fonts/dm-sans';
+import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -46,15 +47,18 @@ export default function RootLayout() {
     BebasNeue_400Regular,
     SpaceMono_400Regular,
     SpaceMono_700Bold,
+    ...Ionicons.font,
   });
 
   useEffect(() => {
-    if (error) throw error;
+    if (error) {
+      console.warn('[fonts] load error, continuing with fallbacks', error);
+    }
   }, [error]);
 
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
-  }, [loaded]);
+    if (loaded || error) SplashScreen.hideAsync();
+  }, [loaded, error]);
 
   useEffect(() => {
     void initLocalNotifications();
@@ -72,7 +76,7 @@ export default function RootLayout() {
     })();
   }, []);
 
-  if (!loaded) return null;
+  if (!loaded && !error) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
