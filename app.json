@@ -33,7 +33,6 @@
         "android.permission.VIBRATE",
         "android.permission.POST_NOTIFICATIONS"
       ],
-      "versionCode": 3,
       "label": "Drop",
       "softwareKeyboardLayoutMode": "resize"
     },
