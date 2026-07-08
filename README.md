@@ -180,7 +180,7 @@ npm run android  # Android
 npm run ios      # iOS (macOS)
 ```
 
-`.env`에 Supabase 연결 정보가 필요합니다:
+로컬 실행에 필요한 환경 변수 (`.env`):
 
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
