@@ -694,6 +694,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       get().setUserAtGym(user.id, false);
     }
 
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/attendance')
+        .then(({ revokeAttendanceRemote }) =>
+          revokeAttendanceRemote({
+            recordId,
+            userId: record.userId,
+            date: record.date,
+          })
+        )
+        .catch((err) => console.warn('[attendance] revoke failed', err));
+    }
+
     recordAdminLogAsActor(adminId, {
       category: 'attendance',
       action: 'attendance.revoke',
@@ -829,6 +841,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
       return { users, currentUser };
     });
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
     recordAdminLog({
       category: 'lesson',
       action: 'lesson.request',
@@ -858,6 +871,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
       return { users, currentUser };
     });
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
     persistAppState();
 
     useNotificationStore.getState().pushInbox({
@@ -891,6 +905,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const currentUser = syncCurrentUser(users, state.currentUser?.id ?? null);
       return { users, currentUser };
     });
+    syncAdminProfileRemote(get().users.find((u) => u.id === userId));
     persistAppState();
     recordAdminLogAsCurrentUser({
       category: 'lesson',
@@ -1295,6 +1310,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     get().updateUserElo(userId, delta);
     get().syncUserRank(userId);
+    const updated = get().users.find((u) => u.id === userId);
+    if (updated && isSupabaseEnabled()) {
+      import('@/src/services/supabase/profiles')
+        .then(({ updateProfileStatsRemote }) =>
+          updateProfileStatsRemote(userId, { elo: updated.elo, rank: updated.rank })
+        )
+        .catch((err) => console.warn('[profile] elo sync failed', err));
+    }
     recordAdminLogAsCurrentUser({
       category: 'member',
       action: 'member.elo_adjust',

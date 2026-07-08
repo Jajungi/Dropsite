@@ -353,36 +353,6 @@ export function subscribeMatchResults(onChange: () => void): () => void {
   return subscribeTable('match-results-realtime', 'match_results', onChange);
 }
 
-export function subscribePointTransactions(userId: string, onChange: () => void): () => void {
-  const client = getSupabase();
-  const channel = client
-    .channel('point-tx-realtime')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'point_transactions', filter: `user_id=eq.${userId}` },
-      () => onChange()
-    )
-    .subscribe();
-  return () => {
-    void client.removeChannel(channel);
-  };
-}
-
-export function subscribeAttendance(userId: string, onChange: () => void): () => void {
-  const client = getSupabase();
-  const channel = client
-    .channel('attendance-realtime')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'attendance_records', filter: `user_id=eq.${userId}` },
-      () => onChange()
-    )
-    .subscribe();
-  return () => {
-    void client.removeChannel(channel);
-  };
-}
-
 export function subscribeCleaningSubmissions(onChange: () => void): () => void {
   return subscribeTable('cleaning-realtime', 'cleaning_submissions', onChange);
 }

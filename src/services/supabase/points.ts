@@ -132,3 +132,60 @@ export async function fetchPointTransactions(userId: string): Promise<PointTrans
   if (error) throw error;
   return (data as DbPointTx[]).map(mapPointTxRow);
 }
+
+/** 관리자: 전체 회원 포인트 거래 (RLS is_admin) */
+export async function fetchAllPointTransactions(limit = 500): Promise<PointTransaction[]> {
+  const { data, error } = await getSupabase()
+    .from('point_transactions')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as DbPointTx[]).map(mapPointTxRow);
+}
+
+export async function revokePointTransactionRemote(txId: string, reason?: string): Promise<number> {
+  const { data, error } = await getSupabase().rpc('rpc_revoke_point_transaction', {
+    p_tx_id: txId,
+    p_reason: reason ?? '운영진 취소',
+  });
+  if (error) throw error;
+  return (data as number) ?? 0;
+}
+
+export async function adminRefundCourtRemote(courtId: number, userId: string): Promise<number> {
+  const { data, error } = await getSupabase().rpc('rpc_admin_refund_court', {
+    p_court_id: courtId,
+    p_user_id: userId,
+  });
+  if (error) throw error;
+  return (data as number) ?? 0;
+}
+
+export function subscribeAllPointTransactions(onChange: () => void): () => void {
+  const client = getSupabase();
+  const channel = client
+    .channel('point-tx-all-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'point_transactions' }, () =>
+      onChange()
+    )
+    .subscribe();
+  return () => {
+    void client.removeChannel(channel);
+  };
+}
+
+export function subscribePointTransactions(userId: string, onChange: () => void): () => void {
+  const client = getSupabase();
+  const channel = client
+    .channel('point-tx-realtime')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'point_transactions', filter: `user_id=eq.${userId}` },
+      () => onChange()
+    )
+    .subscribe();
+  return () => {
+    void client.removeChannel(channel);
+  };
+}

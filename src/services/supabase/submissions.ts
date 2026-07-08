@@ -48,7 +48,17 @@ export async function insertCleaningRemote(entry: CleaningSubmission): Promise<s
   return data?.id ?? null;
 }
 
-export async function revokeCleaningRemote(id: string, adminId: string): Promise<void> {
+export async function revokeCleaningRemote(id: string, adminId: string, reason?: string): Promise<number> {
+  const { data, error } = await getSupabase().rpc('rpc_revoke_cleaning_submission', {
+    p_submission_id: id,
+    p_reason: reason ?? '운영진 취소',
+  });
+  if (error) throw error;
+  return (data as number) ?? 0;
+}
+
+/** @deprecated RPC 사용 — revokeCleaningRemote 로 대체 */
+export async function markCleaningRevokedRemote(id: string, adminId: string): Promise<void> {
   const { error } = await getSupabase()
     .from('cleaning_submissions')
     .update({ revoked_at: new Date().toISOString(), revoked_by: adminId })

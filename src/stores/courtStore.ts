@@ -317,20 +317,43 @@ export const useCourtStore = create<CourtState>((set, get) => ({
     const payerId = court.reservedBy ?? court.players[0]?.userId;
     let refunded = 0;
     if (payerId) {
-      const tx = usePointStore
-        .getState()
-        .transactions.find(
-          (t) =>
-            t.userId === payerId &&
-            t.type === 'court_reserve' &&
-            t.meta?.courtId === courtId &&
-            t.amount < 0
-        );
-      if (tx) {
-        refunded = -tx.amount;
-        applyPointChange(payerId, refunded, 'admin', `코트 ${courtId} 예약 환불 (운영진)`, {
-          courtId,
-        });
+      if (isSupabaseEnabled()) {
+        import('@/src/services/supabase/points')
+          .then(({ adminRefundCourtRemote }) =>
+            adminRefundCourtRemote(courtId, payerId).then((amount) => {
+              if (amount > 0) {
+                useAuthStore.getState().updateUserPoints(payerId, amount);
+              }
+            })
+          )
+          .catch((err) => console.warn('[court] admin refund failed', err));
+        const tx = usePointStore
+          .getState()
+          .transactions.find(
+            (t) =>
+              t.userId === payerId &&
+              t.type === 'court_reserve' &&
+              t.meta?.courtId === courtId &&
+              t.amount < 0 &&
+              !t.revokedAt
+          );
+        if (tx) refunded = -tx.amount;
+      } else {
+        const tx = usePointStore
+          .getState()
+          .transactions.find(
+            (t) =>
+              t.userId === payerId &&
+              t.type === 'court_reserve' &&
+              t.meta?.courtId === courtId &&
+              t.amount < 0
+          );
+        if (tx) {
+          refunded = -tx.amount;
+          applyPointChange(payerId, refunded, 'admin', `코트 ${courtId} 예약 환불 (운영진)`, {
+            courtId,
+          });
+        }
       }
     }
 

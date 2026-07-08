@@ -174,26 +174,46 @@ function setupSocialSubscriptions(userId: string | null, isAdmin: boolean) {
           }
         })
       );
-      socialUnsubs.push(
-        social.subscribePointTransactions(userId, async () => {
-          try {
-            const { fetchPointTransactions } = await import('@/src/services/supabase/points');
-            usePointStore.getState().hydrate(await fetchPointTransactions(userId));
-          } catch {
-            /* ignore */
-          }
-        })
-      );
-      socialUnsubs.push(
-        social.subscribeAttendance(userId, async () => {
-          try {
-            const { fetchAttendance } = await import('@/src/services/supabase/attendance');
-            useAuthStore.setState({ attendanceRecords: await fetchAttendance(userId) });
-          } catch {
-            /* ignore */
-          }
-        })
-      );
+      void import('@/src/services/supabase/points').then((points) => {
+        const reloadPoints = () => {
+          void (async () => {
+            try {
+              const txs = isAdmin
+                ? await points.fetchAllPointTransactions()
+                : await points.fetchPointTransactions(userId);
+              usePointStore.getState().hydrate(txs);
+            } catch {
+              /* ignore */
+            }
+          })();
+        };
+        socialUnsubs.push(
+          isAdmin
+            ? points.subscribeAllPointTransactions(reloadPoints)
+            : points.subscribePointTransactions(userId, reloadPoints)
+        );
+        reloadPoints();
+      });
+      void import('@/src/services/supabase/attendance').then((attendance) => {
+        const reload = () => {
+          void (async () => {
+            try {
+              const records = isAdmin
+                ? await attendance.fetchAllAttendance()
+                : await attendance.fetchAttendance(userId);
+              useAuthStore.setState({ attendanceRecords: records });
+            } catch {
+              /* ignore */
+            }
+          })();
+        };
+        socialUnsubs.push(
+          isAdmin
+            ? attendance.subscribeAllAttendance(reload)
+            : attendance.subscribeAttendance(userId, reload)
+        );
+        reload();
+      });
       socialUnsubs.push(
         social.subscribeCleaningSubmissions(async () => {
           try {
@@ -225,8 +245,8 @@ async function hydrateUserData(userId: string | null, isAdmin: boolean) {
   if (!userId) return;
 
   const [
-    { fetchPointTransactions },
-    { fetchAttendance },
+    { fetchPointTransactions, fetchAllPointTransactions },
+    { fetchAttendance, fetchAllAttendance },
     { fetchMatchResults },
     { fetchCleaningSubmissions },
     { fetchNotifications },
@@ -243,8 +263,8 @@ async function hydrateUserData(userId: string | null, isAdmin: boolean) {
   ]);
 
   const results = await Promise.allSettled([
-    fetchPointTransactions(userId),
-    fetchAttendance(userId),
+    isAdmin ? fetchAllPointTransactions() : fetchPointTransactions(userId),
+    isAdmin ? fetchAllAttendance() : fetchAttendance(userId),
     fetchMatchResults(),
     fetchCleaningSubmissions(),
     fetchNotifications(userId),

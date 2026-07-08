@@ -164,7 +164,20 @@ function revokeServiceSubmission(
   }
 
   const label = kind === 'cleaning' ? '청소 인증' : '네트 인증';
-  applyPointChange(entry.userId, -entry.points, 'admin', `${label} 취소 · ${reason}`);
+  const useRemote =
+    isSupabaseEnabled() &&
+    !submissionId.startsWith('clean-') &&
+    !submissionId.startsWith('net-') &&
+    !submissionId.startsWith('cock-');
+
+  if (useRemote) {
+    import('@/src/services/supabase/submissions')
+      .then(({ revokeCleaningRemote }) => revokeCleaningRemote(submissionId, adminId, reason))
+      .catch((err) => console.warn('[cleaning] revoke failed', err));
+    useAuthStore.getState().updateUserPoints(entry.userId, -entry.points);
+  } else {
+    applyPointChange(entry.userId, -entry.points, 'admin', `${label} 취소 · ${reason}`);
+  }
 
   if (kind === 'cleaning') {
     useAuthStore.setState((state) => ({
@@ -189,11 +202,6 @@ function revokeServiceSubmission(
       c.id === submissionId ? { ...c, revokedAt, revokedBy: adminId } : c
     ),
   }));
-  if (isSupabaseEnabled() && !submissionId.startsWith('clean-') && !submissionId.startsWith('net-') && !submissionId.startsWith('cock-')) {
-    import('@/src/services/supabase/submissions')
-      .then(({ revokeCleaningRemote }) => revokeCleaningRemote(submissionId, adminId))
-      .catch((err) => console.warn('[cleaning] revoke failed', err));
-  }
   recordAdminLogAsActor(adminId, {
     category: 'point',
     action: kind === 'cleaning' ? 'cleaning.revoke' : 'net_setup.revoke',
