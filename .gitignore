@@ -37,6 +37,10 @@ yarn-error.*
 .env
 .env*.local
 
+# Firebase Admin / FCM service account (never commit)
+*firebase-adminsdk*.json
+dropsite-*-firebase-adminsdk-*.json
+
 # typescript
 *.tsbuildinfo
 
