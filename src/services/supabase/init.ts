@@ -19,7 +19,7 @@ let profilesUnsub: (() => void) | null = null;
 let socialUnsubs: (() => void)[] = [];
 
 /** 디자인용 mock 초기값 제거 — Supabase가 아직 채우지 않는 스토어 비우기 */
-function clearMockStores() {
+export function resetSupabaseSessionStores() {
   useFriendStore.getState().hydrate({}, []);
   usePointStore.getState().hydrate([]);
   useLobbyStore.getState().hydrateRooms([]);
@@ -32,7 +32,6 @@ function clearMockStores() {
     cleaningLeaderboard: [],
     inbox: [],
   });
-  // mock 코트(가짜 예약·경기) 제거 — DB 코트를 불러오기 전 빈 코트로 초기화
   useCourtStore.getState().hydrateCourts(createEmptyCourts());
 }
 
@@ -40,7 +39,7 @@ function clearMockStores() {
 export async function initSupabaseApp(): Promise<boolean> {
   if (!isSupabaseEnabled()) return false;
 
-  clearMockStores();
+  resetSupabaseSessionStores();
 
   const sessionUserId = await supabaseRestoreSession();
   const bundle = await loadSupabaseAuthBundle(sessionUserId);
@@ -49,14 +48,7 @@ export async function initSupabaseApp(): Promise<boolean> {
     ? bundle.users.find((u) => u.id === sessionUserId) ?? null
     : null;
 
-  useAuthStore.getState().hydrateAuth(
-    bundle.users,
-    [],
-    sessionUserId,
-    null,
-    {},
-    null
-  );
+  useAuthStore.getState().hydrateAuth(bundle.users, [], sessionUserId, null, {}, null);
 
   useAuthStore.setState({
     currentUser,
@@ -70,7 +62,9 @@ export async function initSupabaseApp(): Promise<boolean> {
     useCourtStore.getState().hydrateCourts(courts);
   }
 
-  await hydrateUserData(currentUser?.id ?? null, currentUser?.membershipTier === 'admin');
+  if (currentUser) {
+    await bindSupabaseSession(currentUser.id, currentUser.membershipTier === 'admin');
+  }
 
   courtsUnsub?.();
   profilesUnsub?.();
@@ -86,7 +80,11 @@ export async function initSupabaseApp(): Promise<boolean> {
       const current = auth.currentUser?.id
         ? users.find((u) => u.id === auth.currentUser?.id) ?? null
         : null;
-      useAuthStore.setState({ users, currentUser: current, isGuestSession: current?.membershipTier === 'guest' });
+      useAuthStore.setState({
+        users,
+        currentUser: current,
+        isGuestSession: current?.membershipTier === 'guest',
+      });
     } catch {
       /* ignore */
     }
@@ -94,21 +92,27 @@ export async function initSupabaseApp(): Promise<boolean> {
 
   getSupabase().auth.onAuthStateChange(async (event) => {
     if (event === 'SIGNED_OUT') {
+      await import('@/src/services/supabase/session').then(({ afterSupabaseAuth }) =>
+        afterSupabaseAuth(null)
+      );
       useAuthStore.setState({ currentUser: null, isAuthenticated: false, isGuestSession: false });
     }
   });
-
-  setupSocialSubscriptions(currentUser?.id ?? null, currentUser?.membershipTier === 'admin');
 
   useAuthStore.getState().setAuthHydrated();
   return true;
 }
 
+/** 로그인·세션 복구 후 사용자 데이터 hydrate + realtime 재구독 */
+export async function bindSupabaseSession(userId: string, isAdmin: boolean) {
+  await hydrateUserData(userId, isAdmin);
+  setupSocialSubscriptions(userId, isAdmin);
+}
+
 /** 소셜·경기·알림 실시간 구독 — 변경 시 해당 스토어를 다시 불러옴 */
-function setupSocialSubscriptions(userId: string | null, isAdmin: boolean) {
+function setupSocialSubscriptions(userId: string, isAdmin: boolean) {
   socialUnsubs.forEach((fn) => fn());
   socialUnsubs = [];
-  if (!userId) return;
 
   import('@/src/services/supabase/social')
     .then((social) => {
@@ -153,8 +157,7 @@ function setupSocialSubscriptions(userId: string | null, isAdmin: boolean) {
         social.subscribeNotifications(userId, async () => {
           try {
             const { fetchNotifications } = await import('@/src/services/supabase/notifications');
-            const inbox = await fetchNotifications(userId);
-            useNotificationStore.setState({ inbox });
+            useNotificationStore.setState({ inbox: await fetchNotifications(userId) });
           } catch {
             /* ignore */
           }
@@ -218,7 +221,9 @@ function setupSocialSubscriptions(userId: string | null, isAdmin: boolean) {
         social.subscribeCleaningSubmissions(async () => {
           try {
             const { fetchCleaningSubmissions } = await import('@/src/services/supabase/submissions');
-            useNotificationStore.setState({ cleaningLeaderboard: await fetchCleaningSubmissions() });
+            useNotificationStore.setState({
+              cleaningLeaderboard: await fetchCleaningSubmissions(),
+            });
           } catch {
             /* ignore */
           }
@@ -241,9 +246,7 @@ function setupSocialSubscriptions(userId: string | null, isAdmin: boolean) {
 }
 
 /** 로그인 사용자 기준 모든 로컬 스토어를 Supabase 데이터로 채움 */
-async function hydrateUserData(userId: string | null, isAdmin: boolean) {
-  if (!userId) return;
-
+async function hydrateUserData(userId: string, isAdmin: boolean) {
   const [
     { fetchPointTransactions, fetchAllPointTransactions },
     { fetchAttendance, fetchAllAttendance },

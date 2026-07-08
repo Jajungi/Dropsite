@@ -19,6 +19,7 @@ import { persistAppState } from '@/src/services/appState';
 import { recordAdminLogAsActor } from '@/src/services/adminLog';
 import { pushLocalNotification } from '@/src/services/localNotifications';
 import { isSupabaseEnabled } from '@/src/lib/supabase';
+import { runWhenRemoteId } from '@/src/utils/localId';
 
 type NotificationGet = () => NotificationState;
 type NotificationSet = (
@@ -27,32 +28,42 @@ type NotificationSet = (
     | ((state: NotificationState) => Partial<NotificationState>)
 ) => void;
 
-/** 랭크전 확정/철회 후 대상 회원 전적·엘로를 프로필에 반영 (관리자 경로) */
-function syncMatchStatsRemote(userIds: string[]) {
+/** 랭크전 확정/철회 후 대상 회원 전적·엘로를 프로필에 반영 */
+function syncMatchStatsRemote(matchId: string, userIds: string[]) {
   if (!isSupabaseEnabled() || userIds.length === 0) return;
-  import('@/src/services/supabase/profiles')
-    .then(({ updateProfileStatsRemote }) => {
-      const users = useAuthStore.getState().users;
-      return Promise.all(
-        userIds.map((id) => {
-          const u = users.find((x) => x.id === id);
-          if (!u) return Promise.resolve();
-          return updateProfileStatsRemote(id, {
-            elo: u.elo,
-            rank: u.rank,
-            wins: u.wins,
-            losses: u.losses,
-            totalGames: u.totalGames,
-          });
-        })
+  runWhenRemoteId(
+    () => {
+      const state = useNotificationStore.getState();
+      return (
+        state.pendingMatches.find((m) => m.id === matchId)?.id ??
+        state.matchHistory.find((m) => m.id === matchId)?.id ??
+        matchId
       );
-    })
-    .catch((err) => console.warn('[match] stats sync failed', err));
+    },
+    (remoteId) =>
+      import('@/src/services/supabase/matches').then(({ syncMatchStatsRemote: sync }) =>
+        sync(remoteId, userIds)
+      )
+  );
 }
 
-/** 난타(친선)를 제외한 '경기'만 Elo·전적 반영 대상 */
-function isRatedMode(gameMode?: GameMode): boolean {
-  return gameMode !== 'nanta';
+/** 경기 상태 변경(확정/취소/철회)을 Supabase 에 반영 (fire-and-forget) */
+function syncMatchPatchRemote(matchId: string, patch: Partial<MatchResult>) {
+  if (!isSupabaseEnabled()) return;
+  runWhenRemoteId(
+    () => {
+      const state = useNotificationStore.getState();
+      return (
+        state.pendingMatches.find((m) => m.id === matchId)?.id ??
+        state.matchHistory.find((m) => m.id === matchId)?.id ??
+        matchId
+      );
+    },
+    (remoteId) =>
+      import('@/src/services/supabase/matches').then(({ updateMatchRemote }) =>
+        updateMatchRemote(remoteId, patch)
+      )
+  );
 }
 
 /**
@@ -114,14 +125,9 @@ function ratedMatchesTodayForUsers(history: MatchResult[], userIds: string[]): n
   return max;
 }
 
-/** 경기 상태 변경(확정/취소/철회)을 Supabase 에 반영 (fire-and-forget) */
-function syncMatchPatchRemote(matchId: string, patch: Partial<MatchResult>) {
-  if (!isSupabaseEnabled()) return;
-  // 로컬 임시 id(match-...)는 서버에 없으므로 스킵 — insert 반환 uuid 로 치환된 경우만 반영
-  if (matchId.startsWith('match-')) return;
-  import('@/src/services/supabase/matches')
-    .then(({ updateMatchRemote }) => updateMatchRemote(matchId, patch))
-    .catch((err) => console.warn('[match] update failed', err));
+/** 난타(친선)를 제외한 '경기'만 Elo·전적 반영 대상 */
+function isRatedMode(gameMode?: GameMode): boolean {
+  return gameMode !== 'nanta';
 }
 
 /** 청소·네트·콕 인증을 서버 검증 RPC(rpc_submit_cleaning)로 저장 — 서버가 포인트 금액을 강제 */
@@ -374,7 +380,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       ),
     }));
     syncMatchPatchRemote(matchId, patch);
-    if (rated) syncMatchStatsRemote([...winners, ...losers]);
+    if (rated) syncMatchStatsRemote(matchId, [...winners, ...losers]);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.confirm',
@@ -435,12 +441,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     }
 
     const relatedTx = usePointStore.getState().transactions.filter(
-      (t) => t.meta?.matchId === matchId && t.amount > 0
+      (t) => t.meta?.matchId === matchId && t.amount > 0 && !t.revokedAt
     );
     relatedTx.forEach((tx) => {
-      applyPointChange(tx.userId, -tx.amount, 'admin', `경기 확정 철회 · ${reason}`, {
-        matchId,
-      });
+      usePointStore.getState().adminRevokeTransaction(tx.id, adminId, reason);
     });
 
     const patch = {
@@ -458,7 +462,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       ),
     }));
     syncMatchPatchRemote(matchId, patch);
-    if (rated) syncMatchStatsRemote([...winners, ...losers]);
+    if (rated) syncMatchStatsRemote(matchId, [...winners, ...losers]);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.revoke',
@@ -570,7 +574,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           })
         )
         .catch((err) => console.warn('[match] insert failed', err));
-      if (applyNow) syncMatchStatsRemote(participants);
+      if (applyNow) syncMatchStatsRemote(matchId, participants);
     }
     persistAppState();
 

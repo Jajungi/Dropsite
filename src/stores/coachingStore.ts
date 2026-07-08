@@ -3,6 +3,7 @@ import type { CoachAnnouncement } from '@/src/types';
 import { MOCK_COACH_ANNOUNCEMENTS } from '@/src/services/mockData';
 import { persistAppState } from '@/src/services/appState';
 import { isSupabaseEnabled } from '@/src/lib/supabase';
+import { runWhenRemoteId } from '@/src/utils/localId';
 import { recordAdminLogAsCurrentUser } from '@/src/services/adminLog';
 import { useAuthStore } from '@/src/stores/authStore';
 import { canManageCoachAnnouncement, canPostCoachAnnouncement } from '@/src/utils/coachAccess';
@@ -92,9 +93,13 @@ export const useCoachingStore = create<CoachingState>((set, get) => ({
       announcements: state.announcements.filter((a) => a.id !== id),
     }));
     if (isSupabaseEnabled()) {
-      import('@/src/services/supabase/social')
-        .then(({ deleteCoachAnnouncementRemote }) => deleteCoachAnnouncementRemote(id))
-        .catch((err) => console.warn('[coach] remove failed', err));
+      runWhenRemoteId(
+        () => useCoachingStore.getState().announcements.find((a) => a.id === id)?.id ?? id,
+        (remoteId) =>
+          import('@/src/services/supabase/social')
+            .then(({ deleteCoachAnnouncementRemote }) => deleteCoachAnnouncementRemote(remoteId))
+            .catch((err) => console.warn('[coach] remove failed', err))
+      );
     }
     persistAppState();
   },

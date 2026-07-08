@@ -5,14 +5,22 @@ import { isRankEligible } from '@/src/services/elo';
 import type { RankTier } from '@/src/types';
 import { saveRooms } from '@/src/services/persistence';
 import { isSupabaseEnabled } from '@/src/lib/supabase';
+import { runWhenRemoteId } from '@/src/utils/localId';
 import { useAuthStore } from './authStore';
 import { isGuestUser } from '@/src/utils/guestAccess';
 
-function remoteRoom(fn: (m: typeof import('@/src/services/supabase/social')) => Promise<unknown>) {
+function remoteRoom(
+  roomId: string,
+  fn: (remoteId: string, m: typeof import('@/src/services/supabase/social')) => Promise<unknown>
+) {
   if (!isSupabaseEnabled()) return;
-  import('@/src/services/supabase/social')
-    .then(fn)
-    .catch((err) => console.warn('[lobby] sync failed', err));
+  runWhenRemoteId(
+    () => useLobbyStore.getState().rooms.find((r) => r.id === roomId)?.id ?? roomId,
+    (remoteId) =>
+      import('@/src/services/supabase/social')
+        .then((m) => fn(remoteId, m))
+        .catch((err) => console.warn('[lobby] sync failed', err))
+  );
 }
 
 interface LobbyState {
@@ -39,6 +47,7 @@ interface LobbyState {
 }
 
 function persistRooms(rooms: TeamRoom[]) {
+  if (isSupabaseEnabled()) return;
   saveRooms(rooms).catch(() => {});
 }
 
@@ -126,8 +135,8 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     persistRooms(rooms);
     const updated = rooms.find((r) => r.id === roomId);
     if (updated) {
-      remoteRoom((m) =>
-        m.updateTeamRoomRemote(roomId, { members: updated.members, status: updated.status })
+      remoteRoom(roomId, (id, m) =>
+        m.updateTeamRoomRemote(id, { members: updated.members, status: updated.status })
       );
     }
     return { success: true, message: '방에 참여했어요!' };
@@ -154,10 +163,10 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
 
     const remaining = rooms.find((r) => r.id === roomId);
     if (!remaining) {
-      remoteRoom((m) => m.deleteTeamRoomRemote(roomId));
+      remoteRoom(roomId, (id, m) => m.deleteTeamRoomRemote(id));
     } else {
-      remoteRoom((m) =>
-        m.updateTeamRoomRemote(roomId, {
+      remoteRoom(roomId, (id, m) =>
+        m.updateTeamRoomRemote(id, {
           members: remaining.members,
           status: remaining.status,
           hostId: remaining.hostId,
@@ -173,7 +182,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     );
     set({ rooms });
     persistRooms(rooms);
-    remoteRoom((m) => m.updateTeamRoomRemote(roomId, { status: 'reserved' }));
+    remoteRoom(roomId, (id, m) => m.updateTeamRoomRemote(id, { status: 'reserved' }));
   },
 
   adminCloseRoom: (roomId) => {
@@ -182,7 +191,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
     const rooms = get().rooms.filter((r) => r.id !== roomId);
     set({ rooms });
     persistRooms(rooms);
-    remoteRoom((m) => m.deleteTeamRoomRemote(roomId));
+    remoteRoom(roomId, (id, m) => m.deleteTeamRoomRemote(id));
     return { success: true, message: `「${room.title}」 모집방을 종료했어요.` };
   },
 }));

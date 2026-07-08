@@ -99,3 +99,8 @@ export async function updateProfileStatsRemote(
   const { error } = await getSupabase().from('profiles').update(row).eq('id', userId);
   if (error) throw error;
 }
+
+export async function resetPeakReservationsRemote(): Promise<void> {
+  const { error } = await getSupabase().rpc('rpc_reset_peak_reservations');
+  if (error) throw error;
+}

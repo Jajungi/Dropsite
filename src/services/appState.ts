@@ -1,4 +1,5 @@
 import { scheduleSaveAppState, type AppStateSnapshot } from './appPersistence';
+import { isSupabaseEnabled } from '@/src/lib/supabase';
 import { useAuthStore } from '@/src/stores/authStore';
 import { usePointStore } from '@/src/stores/pointStore';
 import { useFriendStore } from '@/src/stores/friendStore';
@@ -38,5 +39,6 @@ export function collectAppStateSnapshot(): AppStateSnapshot {
 }
 
 export function persistAppState() {
+  if (isSupabaseEnabled()) return;
   scheduleSaveAppState(collectAppStateSnapshot);
 }

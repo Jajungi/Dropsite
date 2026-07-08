@@ -23,6 +23,7 @@ import {
 } from '@/src/utils/guestAccess';
 import { validateStudentId } from '@/src/utils/studentId';
 import { saveGuestSession, clearGuestSession } from '@/src/services/guestSession';
+import { afterSupabaseAuth } from '@/src/services/supabase/session';
 
 function pickAvatarColor(index: number): string {
   return AVATAR_COLORS[index % AVATAR_COLORS.length];
@@ -83,7 +84,7 @@ interface AuthState {
   recordMatchStats: (winnerIds: string[], loserIds: string[]) => void;
   reverseMatchStats: (winnerIds: string[], loserIds: string[]) => void;
   attendanceRecords: AttendanceRecord[];
-  checkIn: (userId: string) => { success: boolean; message: string };
+  checkIn: (userId: string, options?: { skipGeoFence?: boolean }) => { success: boolean; message: string };
   adminRevokeAttendance: (
     recordId: string,
     adminId: string,
@@ -255,6 +256,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = users.find((u) => u.id === result.userId) ?? null;
       await clearGuestSession();
       set({ users, currentUser: user, isAuthenticated: Boolean(user), isGuestSession: false, credentials: {} });
+      await afterSupabaseAuth(user);
+      get().resetPeakReservationsIfNewDay();
       return { success: true, message: result.message };
     }
 
@@ -309,6 +312,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isGuestSession: true,
         credentials: {},
       });
+      await afterSupabaseAuth(user);
+      get().resetPeakReservationsIfNewDay();
       return { success: true, message: result.message };
     }
 
@@ -334,6 +339,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     if (isSupabaseEnabled()) await supabaseLogout();
     await clearGuestSession();
+    await afterSupabaseAuth(null);
     set({ currentUser: null, isAuthenticated: false, isGuestSession: false });
     if (!isSupabaseEnabled()) persistAppState();
   },
@@ -564,6 +570,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ? { ...state.currentUser, peakTimeReservations: 0 }
         : null,
     }));
+    if (isSupabaseEnabled()) {
+      import('@/src/services/supabase/profiles')
+        .then(({ resetPeakReservationsRemote }) => resetPeakReservationsRemote())
+        .catch((err) => console.warn('[profile] peak reset failed', err));
+    }
   },
 
   recordMatchStats: (winnerIds, loserIds) =>
@@ -608,8 +619,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   attendanceRecords: MOCK_ATTENDANCE,
 
-  checkIn: (userId) => {
-    if (!useAppStore.getState().checkGeoFence()) {
+  checkIn: (userId, options) => {
+    if (!options?.skipGeoFence && !useAppStore.getState().checkGeoFence()) {
       return {
         success: false,
         message: `${GYM_LOCATION.name} 반경 ${GYM_LOCATION.radiusMeters}m 안에서만 출석할 수 있어요.`,
@@ -642,10 +653,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (isSupabaseEnabled()) {
         const isSelf = get().currentUser?.id === userId;
         if (isSelf) {
-          // 서버가 지오펜스·중복·포인트를 검증 (rpc_check_in)
           const loc = useAppStore.getState().location;
           import('@/src/services/supabase/points')
             .then(({ checkInRemote }) => checkInRemote(loc?.latitude ?? null, loc?.longitude ?? null))
+            .then(() =>
+              import('@/src/services/supabase/attendance').then(({ fetchAttendance }) =>
+                fetchAttendance(userId).then((records) =>
+                  useAuthStore.setState({ attendanceRecords: records })
+                )
+              )
+            )
             .catch((err) => console.warn('[attendance] check-in failed', err));
         } else {
           // 관리자 대리 출석: 출석 insert + 포인트 적립(관리자 권한)
@@ -728,7 +745,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return { success: false, message: '승인된 회원만 출석 처리할 수 있어요.' };
     }
 
-    const result = get().checkIn(userId);
+    const result = get().checkIn(userId, { skipGeoFence: true });
     if (!result.success) return result;
 
     recordAdminLogAsActor(adminId, {

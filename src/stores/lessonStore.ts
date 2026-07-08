@@ -5,25 +5,33 @@ import { useNotificationStore } from './notificationStore';
 import { useAuthStore } from './authStore';
 import { persistAppState } from '@/src/services/appState';
 import { isSupabaseEnabled } from '@/src/lib/supabase';
+import { runWhenRemoteId } from '@/src/utils/localId';
 
 function persistLessonQueue() {
   persistAppState();
 }
 
-function remoteLesson(fn: (m: typeof import('@/src/services/supabase/social')) => Promise<unknown>) {
+function remoteQueueEntry(
+  entryId: string,
+  fn: (remoteId: string, m: typeof import('@/src/services/supabase/social')) => Promise<unknown>
+) {
   if (!isSupabaseEnabled()) return;
-  import('@/src/services/supabase/social')
-    .then(fn)
-    .catch((err) => console.warn('[lesson] sync failed', err));
+  runWhenRemoteId(
+    () => useLessonStore.getState().lessonQueue.find((e) => e.id === entryId)?.id ?? entryId,
+    (remoteId) =>
+      import('@/src/services/supabase/social')
+        .then((m) => fn(remoteId, m))
+        .catch((err) => console.warn('[lesson] sync failed', err))
+  );
 }
 
-/** 대기열 재정렬 후 원격 행들의 position·status 를 반영 (uuid 행만) */
+/** 대기열 재정렬 후 원격 행들의 position·status 를 반영 */
 function syncQueueRemote(entries: LessonQueueEntry[]) {
   if (!isSupabaseEnabled()) return;
   entries.forEach((e) => {
-    // 로컬 임시 id(lq-...)는 아직 원격 insert 전 — 건너뜀
-    if (e.id.startsWith('lq-')) return;
-    remoteLesson((m) => m.updateLessonQueueRemote(e.id, { position: e.position, status: e.status }));
+    remoteQueueEntry(e.id, (id, m) =>
+      m.updateLessonQueueRemote(id, { position: e.position, status: e.status })
+    );
   });
 }
 
@@ -204,7 +212,7 @@ export const useLessonStore = create<LessonState>((set, get) => ({
 
     set({ lessonQueue: nextQueue });
     persistLessonQueue();
-    remoteLesson((m) => m.deleteLessonQueueRemote(entry.id));
+    remoteQueueEntry(entry.id, (id, m) => m.deleteLessonQueueRemote(id));
     syncQueueRemote(nextQueue);
     return { success: true, message: '대기열에서 빠졌어요.' };
   },
@@ -306,7 +314,7 @@ export const useLessonStore = create<LessonState>((set, get) => ({
     const nextQueue = normalizeQueue(remaining);
     set({ lessonQueue: nextQueue });
     persistLessonQueue();
-    remoteLesson((m) => m.deleteLessonQueueRemote(entryId));
+    remoteQueueEntry(entryId, (id, m) => m.deleteLessonQueueRemote(id));
     syncQueueRemote(nextQueue);
 
     if (wasNext) {
