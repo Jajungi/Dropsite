@@ -1,9 +1,8 @@
 # Drop (DGIST) — 제품 기능 명세
 
-> **유지보수 규칙**: 새 기능·화면·스토어를 추가할 때 이 문서를 함께 갱신한다.  
-> "기능 모두 구현해줘" 요청 시 이 문서의 `구현 상태`와 `상세 요구사항`을 기준으로 누락 없이 맞춘다.
+본 문서는 Drop 서비스의 화면·기능·구현 상태를 정의한다.
 
-**마지막 갱신**: 2026-07-08
+**문서 버전**: 2026-07-08
 
 ---
 
@@ -206,16 +205,16 @@ others      = checkedIn && !friend && id !== me  // 친구 섹션 아래
 | 웹 배포 | ✅ | Cloudflare Pages |
 | Android 빌드 | ✅ | EAS preview/production |
 
-> 가입: SQL `013` 적용 후 **학번 신규 가입은 준회원으로 자동 승인**. 로컬 모드·구 데이터는 관리자 승인 UI가 남을 수 있음.
+학번 신규 가입(마이그레이션 `013` 적용 환경): 준회원·승인 상태로 생성된다. 로컬(비-Supabase) 모드 및 구 데이터에는 관리자 승인 UI가 사용될 수 있다.
 
-아키텍처·플로우차트: [ARCHITECTURE.md](./ARCHITECTURE.md)
+시스템 구성: [ARCHITECTURE.md](./ARCHITECTURE.md)
 
-### 동기화 서버 (폴백)
+### 동기화 서버 (비-Supabase)
 
 - `GET/PUT /api/sync` — 앱 상태·코트·모집방 일괄 동기화
-- `WS /ws` — 변경 시 모든 클라이언트에 broadcast
-- 데이터: `server/data.json` (개발용, gitignore)
-- **프로덕션은 Supabase Realtime을 사용**
+- `WS /ws` — 변경 브로드캐스트
+- 데이터: `server/data.json` (로컬 개발용, gitignore)
+- 프로덕션 배포는 Supabase Realtime을 사용한다.
 
 ---
 

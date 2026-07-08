@@ -1,108 +1,116 @@
-# 푸시 알림 + Google Play 배포 가이드
+# 푸시 알림 및 Google Play 배포
 
-**마지막 갱신**: 2026-07-08
+**문서 버전**: 2026-07-08
 
-앱 안 알림(알림함/토스트/사이렌)은 이미 동작합니다.  
-이 문서는 **앱이 꺼져 있어도 오는 원격 푸시**와 **Google Play 출시**를 정리합니다.
+인앱 알림(알림함·토스트·사이렌)과 별도로, 애플리케이션이 백그라운드일 때 전달되는 원격 푸시 및 Google Play 배포 구성을 기술한다.
 
-| 구성요소 | 파일 | 역할 |
+| 구성요소 | 경로 | 역할 |
 |----------|------|------|
-| 토큰 등록 | `src/services/pushNotifications.ts` | 로그인 시 Expo 푸시 토큰 → `push_tokens` |
-| 등록 연결 | `app/_layout.tsx` | 정회원 로그인 시 자동 등록 |
-| DB | `supabase/015_push_tokens.sql` / `.ready.sql` | 테이블·RLS·트리거 |
+| 토큰 등록 | `src/services/pushNotifications.ts` | Expo 푸시 토큰 발급 후 `push_tokens` 저장 |
+| 등록 연결 | `app/_layout.tsx` | 비게스트 로그인 시 토큰 등록 |
+| DB | `supabase/015_push_tokens.sql`, `015_push_tokens.ready.sql` | 테이블·RLS·알림 트리거 |
 | 발송 | `supabase/functions/send-push` | Expo Push API 호출 |
 | 빌드 | `eas.json`, `app.json` | preview APK · production AAB |
 
-스토어 문구: [STORE_LISTING.md](./STORE_LISTING.md) · 개인정보: [PRIVACY_POLICY.md](./PRIVACY_POLICY.md)
+스토어 문구: [STORE_LISTING.md](./STORE_LISTING.md)  
+개인정보처리방침: [PRIVACY_POLICY.md](./PRIVACY_POLICY.md)
 
 ---
 
-## 1단계 — Expo(EAS) (보통 완료됨)
+## 1. Expo Application Services (EAS)
 
 ```bash
 npm install -g eas-cli
 eas login
-eas init   # 이미 projectId가 있으면 생략
+eas init
 ```
 
-`app.json` → `extra.eas.projectId` 가 실제 UUID여야 합니다. (REPLACE 플레이스홀더면 안 됨)
+`app.json`의 `extra.eas.projectId`는 유효한 UUID여야 한다.
 
 ---
 
-## 2단계 — Firebase(FCM) + EAS 자격증명
+## 2. Firebase Cloud Messaging 및 EAS 자격증명
 
-1. Firebase 콘솔 → Android 앱 패키지 **`kr.ac.dgist.badmin`**
-2. `google-services.json` → 프로젝트 루트 (`app.json`의 `googleServicesFile`)
-3. **서비스 계정** → 새 비공개 키 JSON 다운로드  
-   (`*firebase-adminsdk*.json` — **Git에 올리지 말 것**, `.gitignore`됨)
-4. FCM 연결:
-   ```bash
-   eas credentials
-   # Android → production → Google Service Account
-   # → Push Notifications (FCM V1) → Upload service account key
-   ```
-   ⚠️ `google-services.json`만으로는 부족합니다. **adminsdk JSON**이 필요합니다.
-
----
-
-## 3단계 — Supabase
-
-1. (필요 시) `011`~`014` 적용 후:
-   - `015_push_tokens.ready.sql` — `{SERVICE_ROLE_KEY}`만 본인 service_role로 바꿔 SQL Editor에서 Run  
-   - **키를 Git에 커밋하지 말 것**
-2. Edge Function:
-   ```bash
-   npx supabase login
-   npx supabase link --project-ref <PROJECT_REF>
-   npx supabase functions deploy send-push
-   ```
-
-대안: Dashboard **Database → Webhooks** 에서 `notifications` INSERT → `send-push`.
-
----
-
-## 4단계 — 빌드
+1. Firebase Console에서 Android 앱을 등록한다. 패키지명: `kr.ac.dgist.badmin`
+2. `google-services.json`을 프로젝트 루트에 둔다 (`app.json` → `android.googleServicesFile`)
+3. Firebase 프로젝트 설정 → 서비스 계정에서 비공개 키(JSON)를 발급한다.  
+   `*firebase-adminsdk*.json`은 버전 관리에 포함하지 않는다 (`.gitignore`).
+4. EAS에 FCM V1 키를 등록한다.
 
 ```bash
-# 실기기 테스트용 APK
-eas build -p android --profile preview
+eas credentials
+# Android → production → Google Service Account
+# → Push Notifications (FCM V1) → Upload a new service account key
+```
 
-# Play 스토어용 AAB
+원격 푸시에는 `google-services.json`과 별도로 FCM V1용 서비스 계정 키가 필요하다.
+
+---
+
+## 3. Supabase
+
+1. 선행 마이그레이션 `011`–`014` 적용 후 `015_push_tokens.ready.sql`을 SQL Editor에서 실행한다.  
+   `{SERVICE_ROLE_KEY}`는 Dashboard의 `service_role` 값으로 치환하며, 해당 키는 공개 저장소에 커밋하지 않는다.
+2. Edge Function 배포:
+
+```bash
+npx supabase login
+npx supabase link --project-ref <PROJECT_REF>
+npx supabase functions deploy send-push
+```
+
+Database Webhooks로 `notifications` INSERT → `send-push`를 연결하는 구성을 사용할 수 있다.
+
+---
+
+## 4. 빌드
+
+```bash
+eas build -p android --profile preview
 eas build -p android --profile production
 ```
 
-- 푸시는 **실기기**에서만 (에뮬·웹 X)
-- 로그인 → 알림 허용 → `push_tokens`에 행이 생기는지 확인
+| 항목 | 내용 |
+|------|------|
+| 원격 푸시 검증 | Android 실기기 |
+| 토큰 확인 | 로그인·알림 허용 후 `push_tokens` 행 생성 |
 
 빌드 목록: https://expo.dev/accounts/go_pro/projects/badmin/builds
 
 ---
 
-## 5단계 — Google Play
+## 5. Google Play
 
-1. Play Console 가입 (일회 $25)
-2. 앱 생성 · 패키지 `kr.ac.dgist.badmin`
-3. **내부 테스트**에 AAB 업로드
+1. Google Play Console 등록
+2. 앱 생성, 패키지 `kr.ac.dgist.badmin`
+3. 내부 테스트 트랙에 production AAB 업로드
 4. 스토어 등록정보: [STORE_LISTING.md](./STORE_LISTING.md)
-5. 개인정보처리방침 URL: `https://<Pages도메인>/privacy`
+5. 개인정보처리방침 URL: `https://<Pages-도메인>/privacy`
 6. (선택) `eas submit -p android --latest` — Play 서비스 계정 JSON 필요
 
 ---
 
-## 동작 흐름
+## 동작 순서
 
 ```
-이벤트 → notifications INSERT
-  → 트리거/웹훅 → send-push
-  → push_tokens 조회 → Expo Push → FCM → 기기
+이벤트 발생
+  → notifications INSERT
+  → 트리거 또는 Webhook
+  → send-push
+  → push_tokens 조회
+  → Expo Push API
+  → FCM
+  → 기기
 ```
 
-상세 다이어그램: [ARCHITECTURE.md](./ARCHITECTURE.md)
+다이어그램: [ARCHITECTURE.md](./ARCHITECTURE.md)
 
-## 문제 해결
+---
 
-| 증상 | 원인 후보 |
-|------|-----------|
-| 토큰 없음 | projectId·실기기·알림 권한·게스트 계정 |
-| 푸시 안 옴 | FCM V1 미연결, 트리거 키/URL, send-push 미배포 |
-| iOS | APNs·Apple 개발자 계정 별도 (Play만이면 불필요) |
+## 장애 대응
+
+| 증상 | 원인 |
+|------|------|
+| 토큰 미생성 | EAS projectId 누락, 웹/에뮬레이터 실행, 알림 거부, 게스트 세션 |
+| 푸시 미수신 | FCM V1 미연결, 트리거 URL·키 오류, `send-push` 미배포 |
+| iOS | APNs 및 Apple Developer 계정 별도 구성 필요 |

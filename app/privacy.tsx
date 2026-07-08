@@ -4,10 +4,7 @@ import { Stack } from 'expo-router';
 import { PageContainer } from '@/src/components/layout/PageContainer';
 import { colors, spacing, typography } from '@/src/theme';
 
-/**
- * Google Play / 공개용 개인정보처리방침 페이지.
- * 원문: docs/PRIVACY_POLICY.md
- */
+/** 공개 개인정보처리방침. 원문: docs/PRIVACY_POLICY.md */
 export default function PrivacyScreen() {
   return (
     <>
