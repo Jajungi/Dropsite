@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Platform, Alert } from 'react-native';
+import { ScrollView, View, Text, StyleSheet, TextInput, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuthStore, useAppStore } from '@/src/stores/authStore';
@@ -21,6 +21,8 @@ import { LessonApplyCard } from '@/src/components/profile/LessonApplyCard';
 import { PointsHistorySheet } from '@/src/components/profile/PointsHistorySheet';
 import { GuestProfileCard } from '@/src/components/profile/GuestProfileCard';
 import { PageContainer } from '@/src/components/layout/PageContainer';
+import { NumericConfirmModal, type NumericConfirmStep } from '@/src/components/ui/NumericConfirmModal';
+import { generateNumericConfirmCode } from '@/src/utils/confirmCode';
 import { useLayoutMode } from '@/src/hooks/useLayoutMode';
 import { CLEANING_AREAS } from '@/src/constants';
 import { NET_SETUP_AREAS, SHUTTLECOCK_CARRY_AREAS, POINT_EARN, POINT_SPEND } from '@/src/constants/points';
@@ -52,6 +54,47 @@ export default function ProfileScreen() {
   const [showCockCarry, setShowCockCarry] = useState(false);
   const [selectedCockArea, setSelectedCockArea] = useState<string>(SHUTTLECOCK_CARRY_AREAS[0]);
   const [participantCount, setParticipantCount] = useState('1');
+  const [deleteStep, setDeleteStep] = useState<NumericConfirmStep>('idle');
+  const [deleteConfirmCode, setDeleteConfirmCode] = useState('');
+  const [deleteCodeInput, setDeleteCodeInput] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const closeDeleteFlow = () => {
+    setDeleteStep('idle');
+    setDeleteConfirmCode('');
+    setDeleteCodeInput('');
+  };
+
+  const startDeleteFlow = () => {
+    setDeleteStep('confirm');
+    setDeleteConfirmCode('');
+    setDeleteCodeInput('');
+  };
+
+  const proceedDeleteToCode = () => {
+    setDeleteConfirmCode(generateNumericConfirmCode());
+    setDeleteCodeInput('');
+    setDeleteStep('code');
+  };
+
+  const executeDeleteAccount = async () => {
+    if (deleteCodeInput !== deleteConfirmCode) return;
+    setDeletingAccount(true);
+    try {
+      const result = await deleteMyAccount();
+      showToast({
+        type: result.success ? 'info' : 'warning',
+        title: '',
+        message: result.message,
+      });
+      if (result.success) {
+        closeDeleteFlow();
+        router.replace('/login');
+      }
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
 
   if (!currentUser) {
     return (
@@ -361,32 +404,7 @@ export default function ProfileScreen() {
           style={{ marginTop: spacing.md }}
         />
         <Pressable
-          onPress={() => {
-            Alert.alert(
-              '계정 삭제',
-              '계정을 삭제하면 전적·포인트 기록이 사라지고, 같은 학번으로 다시 가입할 수 있어요. 계속할까요?',
-              [
-                { text: '취소', style: 'cancel' },
-                {
-                  text: '삭제',
-                  style: 'destructive',
-                  onPress: () => {
-                    void (async () => {
-                      const result = await deleteMyAccount();
-                      showToast({
-                        type: result.success ? 'info' : 'warning',
-                        title: '',
-                        message: result.message,
-                      });
-                      if (result.success) {
-                        router.replace('/login');
-                      }
-                    })();
-                  },
-                },
-              ]
-            );
-          }}
+          onPress={startDeleteFlow}
           style={styles.deleteAccountBtn}
           accessibilityRole="button"
         >
@@ -519,6 +537,23 @@ export default function ProfileScreen() {
           </View>
         </View>
       )}
+
+      <NumericConfirmModal
+        visible={deleteStep !== 'idle'}
+        step={deleteStep === 'confirm' || deleteStep === 'code' ? deleteStep : 'confirm'}
+        title="계정 삭제"
+        body="계정을 삭제하면 전적·포인트 기록이 사라지고, 같은 학번으로 다시 가입할 수 있어요."
+        codeHint="아래 10자리 숫자를 그대로 입력하면 계정이 삭제됩니다."
+        confirmCode={deleteConfirmCode}
+        codeInput={deleteCodeInput}
+        onCodeInputChange={setDeleteCodeInput}
+        onClose={closeDeleteFlow}
+        onProceedToCode={proceedDeleteToCode}
+        onExecute={() => void executeDeleteAccount()}
+        executeLabel="계정 삭제"
+        executing={deletingAccount}
+        executingLabel="삭제 중…"
+      />
     </SafeAreaView>
   );
 }

@@ -7,8 +7,9 @@ import {
   Pressable,
   ScrollView,
   Platform,
-  Alert,
 } from 'react-native';
+import { NumericConfirmModal, type NumericConfirmStep } from '@/src/components/ui/NumericConfirmModal';
+import { generateNumericConfirmCode } from '@/src/utils/confirmCode';
 import { useAuthStore } from '@/src/stores/authStore';
 import { useNotificationStore } from '@/src/stores/notificationStore';
 import { usePointStore } from '@/src/stores/pointStore';
@@ -57,6 +58,7 @@ const LESSON_LABEL = {
 type StatusFilter = 'all' | MemberStatus;
 type TierFilter = 'all' | MembershipTier;
 type SortKey = 'name' | 'recent' | 'points' | 'elo';
+type DeleteStep = NumericConfirmStep;
 
 interface MemberAdminPanelProps {
   adminId: string;
@@ -100,6 +102,10 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
   const [suspendReason, setSuspendReason] = useState('');
   const [noticeTitle, setNoticeTitle] = useState('');
   const [noticeBody, setNoticeBody] = useState('');
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>('idle');
+  const [confirmCode, setConfirmCode] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const selected = users.find((u) => u.id === selectedId) ?? null;
 
@@ -162,6 +168,39 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
 
   const notify = (r: { success: boolean; message: string }, type: 'success' | 'warning' = 'success') => {
     onToast(r.success ? type : 'warning', r.message);
+  };
+
+  const closeDeleteFlow = () => {
+    setDeleteStep('idle');
+    setConfirmCode('');
+    setCodeInput('');
+  };
+
+  const startDeleteFlow = () => {
+    setDeleteStep('confirm');
+    setConfirmCode('');
+    setCodeInput('');
+  };
+
+  const proceedDeleteToCode = () => {
+    setConfirmCode(generateNumericConfirmCode());
+    setCodeInput('');
+    setDeleteStep('code');
+  };
+
+  const executeDelete = async () => {
+    if (!selected || codeInput !== confirmCode) return;
+    setDeleting(true);
+    try {
+      const result = await adminDeleteAccount(selected.id, adminId);
+      onToast(result.success ? 'success' : 'warning', result.message);
+      if (result.success) {
+        closeDeleteFlow();
+        setSelectedId(null);
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const statusFilters: { key: StatusFilter; label: string }[] = [
@@ -277,30 +316,7 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
                   title="계정 삭제"
                   size="sm"
                   variant="danger"
-                  onPress={() => {
-                    const isGuestAccount =
-                      selected.membershipTier === 'guest' || isGuestStudentId(selected.studentId);
-                    Alert.alert(
-                      '계정 삭제',
-                      isGuestAccount
-                        ? `${selected.name} 게스트 계정을 삭제할까요?`
-                        : `${selected.name} (${selected.studentId}) 계정을 삭제할까요? 같은 학번으로 다시 가입할 수 있어요.`,
-                      [
-                        { text: '취소', style: 'cancel' },
-                        {
-                          text: '삭제',
-                          style: 'destructive',
-                          onPress: () => {
-                            void (async () => {
-                              const result = await adminDeleteAccount(selected.id, adminId);
-                              onToast(result.success ? 'success' : 'warning', result.message);
-                              if (result.success) setSelectedId(null);
-                            })();
-                          },
-                        },
-                      ]
-                    );
-                  }}
+                  onPress={startDeleteFlow}
                 />
               )}
             </View>
@@ -534,6 +550,27 @@ export function MemberAdminPanel({ adminId, onToast }: MemberAdminPanelProps) {
             </Section>
           )}
         </ScrollView>
+
+        <NumericConfirmModal
+          visible={deleteStep !== 'idle'}
+          step={deleteStep === 'confirm' || deleteStep === 'code' ? deleteStep : 'confirm'}
+          title="계정 삭제"
+          body={
+            selected.membershipTier === 'guest' || isGuestStudentId(selected.studentId)
+              ? `${selected.name} 게스트 계정을 삭제합니다. 되돌릴 수 없어요.`
+              : `${selected.name} (${selected.studentId}) 계정을 삭제합니다. 같은 학번으로 다시 가입할 수 있어요.`
+          }
+          codeHint={`아래 10자리 숫자를 그대로 입력하면 ${selected.name}님 계정이 삭제됩니다.`}
+          confirmCode={confirmCode}
+          codeInput={codeInput}
+          onCodeInputChange={setCodeInput}
+          onClose={closeDeleteFlow}
+          onProceedToCode={proceedDeleteToCode}
+          onExecute={() => void executeDelete()}
+          executeLabel="계정 삭제"
+          executing={deleting}
+          executingLabel="삭제 중…"
+        />
       </View>
     );
   }

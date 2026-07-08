@@ -115,9 +115,7 @@ export const DB_RESET_OPTIONS: DbResetOption[] = [
   },
 ];
 
-export function generateResetConfirmCode(): string {
-  return Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join('');
-}
+export { generateNumericConfirmCode as generateResetConfirmCode } from '@/src/utils/confirmCode';
 
 function resetMemberStats(user: User): User {
   return {
