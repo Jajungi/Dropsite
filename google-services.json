@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "432473248075",
+    "project_id": "dropsite-92013",
+    "storage_bucket": "dropsite-92013.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:432473248075:android:cdbd98939dde44f40f18ce",
+        "android_client_info": {
+          "package_name": "kr.ac.dgist.badmin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNw46iNpOd-YCggkFthqSXYRBp7E-1My8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
