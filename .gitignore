@@ -40,6 +40,11 @@ yarn-error.*
 # Firebase Admin / FCM service account (never commit)
 *firebase-adminsdk*.json
 dropsite-*-firebase-adminsdk-*.json
+dgistdrop-*-firebase-adminsdk-*.json
+DGISTDrop-*-firebase-adminsdk-*.json
+
+# Supabase CLI local cache
+supabase/.temp/
 
 # typescript
 *.tsbuildinfo

@@ -11,12 +11,13 @@
 |------|------|
 | DB 스키마 및 `005`–`014` 패치 | 적용 |
 | Storage `avatars` | 적용 |
-| Cloudflare Pages 웹 배포 | 적용 |
+| Cloudflare Pages (`dgistdrop` ← `Jajungi/DGISTDrop`) | 적용 |
 | EAS 프로젝트 (`app.json` projectId) | 적용 |
-| Firebase Android · `google-services.json` | 적용 |
+| Firebase Android · `google-services.json` | 적용 (프로젝트 표시명 DGISTDrop) |
 | EAS FCM V1 서비스 계정 | 적용 |
 | Edge Function `send-push` | 배포 |
 | `015` 푸시 토큰 스키마 | 적용 |
+| Supabase 프로젝트명 `DGISTDrop` | 적용 |
 
 ---
 
@@ -24,7 +25,8 @@
 
 | 항목 | 값 |
 |------|-----|
-| 호스팅 | Cloudflare Pages (`main` 자동 배포) |
+| 호스팅 | Cloudflare Pages (`main` 자동 배포, GitHub `Jajungi/DGISTDrop`) |
+| Supabase | 프로젝트 `DGISTDrop` · ref `xndodghcmedkkaurbnab` |
 | 환경 변수 | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
 | Auth | Confirm email 비활성, 신규 가입 허용 |
 | Redirect | Pages 도메인을 Supabase Auth URL에 등록 |

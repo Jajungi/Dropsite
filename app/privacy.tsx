@@ -61,7 +61,7 @@ export default function PrivacyScreen() {
           </Text>
 
           <Pressable
-            onPress={() => Linking.openURL('https://github.com/Jajungi/Dropsite')}
+            onPress={() => Linking.openURL('https://github.com/Jajungi/DGISTDrop')}
             style={styles.linkWrap}
           >
             <Text style={styles.link}>원문·저장소 (GitHub)</Text>

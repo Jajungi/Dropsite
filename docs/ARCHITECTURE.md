@@ -3,7 +3,7 @@
 **문서 버전**: 2026-07-08  
 **대상**: Drop 웹 클라이언트, Android 클라이언트, Supabase 백엔드의 구성 및 데이터 흐름
 
-관련 문서: [PRODUCT_SPEC.md](./PRODUCT_SPEC.md) · [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) · [PUSH_AND_PLAY_STORE.md](./PUSH_AND_PLAY_STORE.md)
+관련 문서: [how-drop-works.html](./how-drop-works.html) (반응형 동작 설명) · [PRODUCT_SPEC.md](./PRODUCT_SPEC.md) · [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) · [PUSH_AND_PLAY_STORE.md](./PUSH_AND_PLAY_STORE.md)
 
 ---
 

@@ -1,7 +1,7 @@
 # Cloudflare Pages 배포
 
 **문서 버전**: 2026-07-08  
-**저장소**: https://github.com/Jajungi/Dropsite
+**저장소**: https://github.com/Jajungi/DGISTDrop
 
 | 항목 | 값 |
 |------|-----|
@@ -17,24 +17,24 @@
 ```powershell
 cd "<프로젝트-루트>"
 git branch -M main
-git remote add origin https://github.com/Jajungi/Dropsite.git
+git remote add origin https://github.com/Jajungi/DGISTDrop.git
 git push -u origin main
 ```
 
-기존 remote가 있는 경우: `git remote set-url origin https://github.com/Jajungi/Dropsite.git`
+기존 remote가 있는 경우: `git remote set-url origin https://github.com/Jajungi/DGISTDrop.git`
 
 ---
 
 ## 2. Pages 프로젝트
 
 1. Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-2. GitHub 저장소 **Jajungi/Dropsite** 연결
+2. GitHub 저장소 **Jajungi/DGISTDrop** 연결
 
 ### 빌드 설정
 
 | 항목 | 값 |
 |------|-----|
-| Project name | `dropsite` (예시). URL은 `<name>.pages.dev` |
+| Project name | `dgistdrop` (또는 Cloudflare에서 연결한 프로젝트명). URL은 `<name>.pages.dev` |
 | Production branch | `main` |
 | Framework preset | `None` |
 | Build command | `npm run build:web` |

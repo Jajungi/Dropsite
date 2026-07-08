@@ -9,6 +9,9 @@
 React Native(Expo)로 만들어 **웹 브라우저·안드로이드·iOS에서 동일하게** 동작하며,
 백엔드는 Supabase(Postgres · Auth · Realtime · Storage)를 사용합니다.
 
+**어떻게 동작하는가 (설명용 HTML)** → [docs/how-drop-works.html](docs/how-drop-works.html)  
+부팅·인증·코트 RPC·포인트 원장·레슨 대기열·푸시·스키마를 반응형 한 페이지로 풀어 둔 문서입니다. (앱 라우트와 무관 · GitHub에서 파일 열어 확인)
+
 ---
 
 ## 이 서비스가 해결하는 문제
@@ -162,6 +165,7 @@ Drop은 이 과정을 디지털화해서:
 
 | 문서 | 내용 |
 |------|------|
+| [docs/how-drop-works.html](docs/how-drop-works.html) | **동작 방식 설명(반응형 HTML)** — 부팅·RPC·스키마·배포 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 사이트·백엔드 상호작용 · Mermaid 플로우 |
 | [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md) | 전체 기능 명세·구현 상태 |
 | [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md) | 개인정보처리방침 (웹 `/privacy`) |

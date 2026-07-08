@@ -16,8 +16,11 @@
 | 항목 | 내용 |
 |------|------|
 | 콘솔 | [supabase.com](https://supabase.com) → New project |
+| 프로젝트명 | `DGISTDrop` |
+| Project ref | `xndodghcmedkkaurbnab` (기존 연동) |
 | 리전 | Northeast Asia (Seoul) 권장 |
 | DB 비밀번호 | 프로젝트 비밀로 보관 |
+| GitHub | `Jajungi/DGISTDrop` 연동 가능 |
 
 ---
 
@@ -169,7 +172,7 @@ where student_id = '<학번>';
 저장소에 `supabase/migrations/`를 두고 Supabase Dashboard → Integrations → GitHub로 연결하면 `main` push 시 마이그레이션을 적용할 수 있다.  
 초기 구축에는 SQL Editor에서 `complete_after_enums.sql` 등 수동 실행이 일반적이다.
 
-공개 저장소: https://github.com/Jajungi/Dropsite
+공개 저장소: https://github.com/Jajungi/DGISTDrop
 
 ---
 

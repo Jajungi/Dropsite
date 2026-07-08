@@ -31,11 +31,14 @@ eas init
 
 ## 2. Firebase Cloud Messaging 및 EAS 자격증명
 
+Firebase 프로젝트 표시명: **DGISTDrop** (Console에서 확인).  
+GCP `project_id`는 Console에 표시된 값을 따르며, 루트의 `google-services.json`과 일치해야 한다.
+
 1. Firebase Console에서 Android 앱을 등록한다. 패키지명: `kr.ac.dgist.badmin`
-2. `google-services.json`을 프로젝트 루트에 둔다 (`app.json` → `android.googleServicesFile`)
+2. `google-services.json`을 프로젝트 루트에 둔다 (`app.json` → `android.googleServicesFile`). 프로젝트 이름을 바꾸거나 앱을 다시 등록했다면 파일을 **다시 받아 교체**한다.
 3. Firebase 프로젝트 설정 → 서비스 계정에서 비공개 키(JSON)를 발급한다.  
    `*firebase-adminsdk*.json`은 버전 관리에 포함하지 않는다 (`.gitignore`).
-4. EAS에 FCM V1 키를 등록한다.
+4. EAS에 FCM V1 키를 등록한다. 프로젝트를 바꿨다면 credentials를 다시 업로드한다.
 
 ```bash
 eas credentials

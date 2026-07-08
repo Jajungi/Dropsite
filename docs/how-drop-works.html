@@ -1,0 +1,2259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Drop Unpacked</title>
+  <meta name="description" content="로그인부터 코트 예약·Realtime·푸시까지 — Drop이 실제로 어떻게 움직이는지 단계 애니메이션으로 풀어 봅니다." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #07140f;
+      --bg2: #0c1f18;
+      --panel: #122820;
+      --panel2: #18352a;
+      --line: rgba(148, 201, 174, 0.18);
+      --ink: #e8f6ee;
+      --muted: #8fb5a1;
+      --brand: #95d5b2;
+      --brand2: #52b788;
+      --accent: #74c69d;
+      --warn: #f4a261;
+      --glow: rgba(82, 183, 136, 0.35);
+      --max: 1120px;
+      --font: "Instrument Sans", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    a { color: var(--brand); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, .mono { font-family: var(--mono); font-size: 0.86em; }
+
+    /* noise + gradient atmosphere */
+    body::before {
+      content: "";
+      position: fixed; inset: 0; pointer-events: none; z-index: -1;
+      background:
+        radial-gradient(900px 480px at 15% -5%, rgba(82,183,136,.22), transparent 60%),
+        radial-gradient(700px 420px at 95% 10%, rgba(27,67,50,.7), transparent 55%),
+        linear-gradient(180deg, #07140f 0%, #0a1a14 40%, #07140f 100%);
+    }
+
+    .nav {
+      position: sticky; top: 0; z-index: 50;
+      backdrop-filter: blur(14px);
+      background: rgba(7, 20, 15, 0.72);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-inner {
+      max-width: var(--max); margin: 0 auto;
+      padding: 0.85rem 1.2rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 0.65rem;
+      font-weight: 700; color: var(--ink); text-decoration: none;
+    }
+    .logo img { width: 34px; height: 34px; border-radius: 10px; background: #fff; object-fit: contain; }
+    .nav-links { display: flex; flex-wrap: wrap; gap: 0.9rem; }
+    .nav-links a { color: var(--muted); font-size: 0.9rem; font-weight: 500; text-decoration: none; }
+    .nav-links a:hover { color: var(--brand); }
+
+    .shell { max-width: var(--max); margin: 0 auto; padding: 0 1.2rem 6rem; }
+
+    /* HERO */
+    .hero {
+      min-height: min(92vh, 860px);
+      display: grid; align-items: center;
+      padding: 3.5rem 0 2rem;
+      position: relative;
+    }
+    @media (min-width: 920px) {
+      .hero { grid-template-columns: 1.05fr 0.95fr; gap: 2rem; }
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--brand2);
+      border: 1px solid var(--line); background: rgba(18,40,32,.7);
+      padding: 0.4rem 0.75rem; border-radius: 999px;
+    }
+    .hero h1 {
+      margin: 1rem 0 0.9rem;
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      line-height: 1.02; letter-spacing: -0.04em;
+    }
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(120deg, #b7e4c7, #52b788 55%, #95d5b2);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .lede { color: var(--muted); font-size: 1.08rem; max-width: 34rem; margin: 0; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 0.65rem; margin-top: 1.5rem; }
+    .btn {
+      border: 1px solid transparent; border-radius: 999px;
+      padding: 0.78rem 1.15rem; font: inherit; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none;
+    }
+    .btn-main { background: var(--brand2); color: #04140d; }
+    .btn-main:hover { filter: brightness(1.08); text-decoration: none; }
+    .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+    .btn-ghost:hover { border-color: var(--brand); color: var(--brand); text-decoration: none; }
+
+    .hero-viz {
+      position: relative; height: clamp(280px, 48vw, 420px);
+      border-radius: 22px; overflow: hidden;
+      border: 1px solid var(--line);
+      background: linear-gradient(160deg, #0e241c, #122820 40%, #0a1813);
+      box-shadow: 0 30px 80px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .hero-viz canvas { width: 100%; height: 100%; display: block; }
+
+    .stats {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.7rem;
+      margin-top: 2rem;
+    }
+    @media (min-width: 640px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+    .stat {
+      border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.05rem;
+      background: rgba(18, 40, 32, 0.75);
+    }
+    .stat b {
+      display: block; font-family: var(--mono); font-size: 1.55rem;
+      color: var(--brand); letter-spacing: -0.03em;
+    }
+    .stat span { color: var(--muted); font-size: 0.84rem; }
+
+    /* SECTION */
+    section.block {
+      margin-top: 5.5rem;
+      scroll-margin-top: 5rem;
+    }
+    .sec-kicker {
+      font-family: var(--mono); color: var(--brand2); font-size: 0.85rem; font-weight: 600;
+      margin-bottom: 0.55rem;
+    }
+    .sec-title {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.7rem, 3.5vw, 2.35rem);
+      letter-spacing: -0.03em;
+    }
+    .sec-sub { margin: 0 0 1.4rem; color: var(--muted); max-width: 40rem; }
+
+    /* LOOP PLAYER */
+    .player {
+      display: grid; gap: 1rem;
+      border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
+      background: rgba(12, 31, 24, 0.9);
+    }
+    @media (min-width: 900px) {
+      .player { grid-template-columns: 220px 1fr; min-height: 460px; }
+    }
+    .step-rail {
+      display: flex; gap: 0.35rem; padding: 0.9rem;
+      overflow-x: auto; border-bottom: 1px solid var(--line);
+      -webkit-overflow-scrolling: touch;
+    }
+    @media (min-width: 900px) {
+      .step-rail {
+        flex-direction: column; overflow-x: hidden; overflow-y: auto;
+        border-bottom: none; border-right: 1px solid var(--line);
+        max-height: 560px;
+      }
+    }
+    .step-chip {
+      flex: 0 0 auto; border: 1px solid transparent; background: transparent;
+      color: var(--muted); border-radius: 12px; padding: 0.65rem 0.75rem;
+      font: inherit; text-align: left; cursor: pointer; min-width: 7.5rem;
+      transition: background .25s, color .25s, border-color .25s, transform .25s;
+    }
+    .step-chip:hover { color: var(--ink); background: rgba(255,255,255,.03); }
+    .step-chip.active {
+      background: rgba(82,183,136,.14);
+      border-color: rgba(82,183,136,.4);
+      color: var(--brand);
+      transform: translateX(2px);
+    }
+    .step-chip .n {
+      font-family: var(--mono); font-size: 0.72rem; opacity: 0.75; display: block;
+    }
+    .step-chip .t { font-weight: 600; font-size: 0.92rem; }
+
+    .stage {
+      position: relative; display: grid;
+      grid-template-rows: 1fr auto;
+      min-height: 380px;
+    }
+    .stage-canvas-wrap {
+      position: relative; min-height: 280px;
+      background:
+        radial-gradient(circle at 50% 40%, rgba(82,183,136,.12), transparent 55%),
+        linear-gradient(180deg, #0f221b, #0a1712);
+    }
+    .stage-canvas-wrap canvas { width: 100%; height: 100%; display: block; min-height: 280px; }
+    @media (min-width: 900px) {
+      .stage-canvas-wrap { min-height: 340px; }
+      .stage-canvas-wrap canvas { min-height: 340px; }
+    }
+
+    .caption {
+      padding: 1.15rem 1.25rem 1.25rem;
+      border-top: 1px solid var(--line);
+      background: rgba(8,18,14,.55);
+    }
+    .caption .fade {
+      animation: fadeUp .45s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .caption h3 { margin: 0 0 0.35rem; font-size: 1.15rem; }
+    .caption p { margin: 0; color: var(--muted); }
+    .caption .meta {
+      margin-top: 0.7rem; display: flex; flex-wrap: wrap; gap: 0.4rem;
+    }
+    .tag {
+      font-size: 0.75rem; font-weight: 600; padding: 0.28rem 0.55rem;
+      border-radius: 999px; border: 1px solid var(--line);
+      background: rgba(255,255,255,.03); color: var(--brand);
+      font-family: var(--mono);
+    }
+
+    .controls {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem;
+      padding: 0.75rem 1rem; border-top: 1px solid var(--line);
+      background: rgba(0,0,0,.2);
+    }
+    .ctrl {
+      border: 1px solid var(--line); background: rgba(255,255,255,.04);
+      color: var(--ink); border-radius: 999px; padding: 0.45rem 0.8rem;
+      font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    }
+    .ctrl:hover, .ctrl.on { border-color: var(--brand2); color: var(--brand); background: rgba(82,183,136,.12); }
+    .progress {
+      flex: 1; min-width: 120px; height: 6px; border-radius: 999px;
+      background: rgba(255,255,255,.08); overflow: hidden;
+    }
+    .progress > i {
+      display: block; height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--brand2), var(--brand));
+      transition: width .25s linear;
+    }
+    .prog-label {
+      font-family: var(--mono); font-size: 0.78rem; color: var(--muted); min-width: 3.2rem;
+    }
+
+    /* ARCH EXPLORER */
+    .arch {
+      display: grid; gap: 1rem;
+    }
+    @media (min-width: 960px) {
+      .arch { grid-template-columns: 1.15fr 0.85fr; align-items: stretch; }
+    }
+    .arch-canvas-box {
+      border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
+      background: #0b1a14; min-height: 400px; position: relative;
+    }
+    .arch-canvas-box canvas { width: 100%; height: 100%; display: block; min-height: 400px; }
+    .arch-side {
+      border: 1px solid var(--line); border-radius: 22px;
+      background: rgba(18,40,32,.8); padding: 1.15rem 1.2rem;
+      display: flex; flex-direction: column; gap: 0.75rem;
+      min-height: 400px;
+    }
+    .arch-side h3 { margin: 0; font-size: 1.25rem; animation: fadeUp .35s ease both; }
+    .arch-side p { margin: 0; color: var(--muted); }
+    .arch-flow {
+      flex: 1; min-height: 120px; border-radius: 14px; overflow: hidden;
+      border: 1px solid var(--line); background: #07140f; position: relative;
+    }
+    .arch-flow canvas { width: 100%; height: 100%; display: block; min-height: 120px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .layer-btn {
+      border: 1px solid var(--line); background: transparent; color: var(--muted);
+      border-radius: 12px; padding: 0.55rem 0.7rem; font: inherit; font-weight: 600;
+      cursor: pointer; text-align: left; transition: transform .2s, background .2s, color .2s, border-color .2s;
+    }
+    .layer-btn:hover { transform: translateY(-1px); color: var(--ink); }
+    .layer-btn.active {
+      color: var(--brand); border-color: rgba(82,183,136,.45); background: rgba(82,183,136,.1);
+      box-shadow: 0 0 0 1px rgba(82,183,136,.15);
+    }
+
+    /* SYSTEMS */
+    .systems-shell {
+      display: grid; gap: 0.9rem;
+    }
+    @media (min-width: 960px) {
+      .systems-shell { grid-template-columns: 280px 1fr; align-items: stretch; }
+    }
+    .sys-list {
+      display: flex; flex-direction: column; gap: 0.45rem;
+      max-height: 520px; overflow-y: auto;
+    }
+    @media (max-width: 959px) {
+      .sys-list {
+        flex-direction: row; overflow-x: auto; overflow-y: hidden;
+        max-height: none; padding-bottom: 0.25rem;
+      }
+    }
+    .sys-item {
+      border: 1px solid var(--line); border-radius: 14px; padding: 0.75rem 0.85rem;
+      background: rgba(18,40,32,.65); color: var(--muted);
+      cursor: pointer; text-align: left; font: inherit;
+      min-width: 160px; transition: transform .22s, border-color .22s, background .22s, color .22s;
+    }
+    .sys-item:hover { transform: translateX(3px); color: var(--ink); }
+    .sys-item.active {
+      color: var(--brand); border-color: rgba(82,183,136,.5);
+      background: rgba(82,183,136,.12);
+      box-shadow: inset 3px 0 0 var(--brand2);
+    }
+    .sys-item .code {
+      font-family: var(--mono); font-size: 0.72rem; opacity: 0.75; display: block;
+    }
+    .sys-item .ttl { font-weight: 700; font-size: 0.95rem; display: block; margin-top: 0.15rem; }
+    .sys-item .sub { font-size: 0.8rem; opacity: 0.8; margin-top: 0.15rem; display: block; }
+    .sys-stage {
+      border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
+      background: #0b1a14; display: grid; grid-template-rows: 1fr auto;
+      min-height: 420px;
+    }
+    .sys-canvas-wrap {
+      position: relative; min-height: 260px;
+      background:
+        radial-gradient(circle at 30% 40%, rgba(82,183,136,.1), transparent 50%),
+        linear-gradient(180deg, #0f221b, #0a1712);
+    }
+    .sys-canvas-wrap canvas { width: 100%; height: 100%; display: block; min-height: 260px; }
+    @media (min-width: 960px) {
+      .sys-canvas-wrap { min-height: 300px; }
+      .sys-canvas-wrap canvas { min-height: 300px; }
+    }
+    .sys-caption {
+      padding: 1.1rem 1.2rem 1.2rem; border-top: 1px solid var(--line);
+      background: rgba(8,18,14,.6);
+    }
+    .sys-caption .swap { animation: fadeUp .4s ease both; }
+    .sys-caption h3 { margin: 0 0 0.35rem; font-size: 1.15rem; }
+    .sys-caption p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+    .sys-steps {
+      display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem;
+    }
+    .sys-step {
+      font-size: 0.75rem; font-family: var(--mono); font-weight: 600;
+      padding: 0.32rem 0.55rem; border-radius: 999px;
+      border: 1px solid var(--line); color: var(--muted); background: rgba(255,255,255,.03);
+      transition: background .25s, color .25s, border-color .25s, transform .25s;
+    }
+    .sys-step.on {
+      color: #04140d; background: var(--brand2); border-color: var(--brand2);
+      transform: translateY(-1px);
+    }
+
+    /* GRID CARDS (legacy unused kept minimal) */
+    .grid-3 { display: none; }
+    .detail-panel { display: none; }
+
+    /* SCHEMA */
+    .schema-wrap {
+      border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
+      background: rgba(12,31,24,.9);
+    }
+    .schema-tabs {
+      display: flex; gap: 0.35rem; padding: 0.75rem; overflow-x: auto;
+      border-bottom: 1px solid var(--line);
+    }
+    .schema-tabs button {
+      flex: 0 0 auto; border: 1px solid transparent; background: transparent;
+      color: var(--muted); border-radius: 999px; padding: 0.45rem 0.8rem;
+      font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+    }
+    .schema-tabs button.active {
+      color: #04140d; background: var(--brand2);
+    }
+    .schema-body { padding: 1.2rem; }
+    .col-grid {
+      display: grid; gap: 0.5rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 640px) { .col-grid { grid-template-columns: 1fr 1fr; } }
+    .col {
+      border: 1px solid var(--line); border-radius: 12px; padding: 0.65rem 0.75rem;
+      background: rgba(255,255,255,.02);
+      animation: fadeUp .35s ease both;
+    }
+    .col code { color: var(--brand); font-weight: 600; }
+    .col span { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 0.2rem; }
+
+    /* ERD (Supabase-style) */
+    .erd-shell {
+      display: grid; gap: 0.9rem;
+    }
+    @media (min-width: 960px) {
+      .erd-shell { grid-template-columns: 1fr 320px; align-items: stretch; }
+    }
+    .erd-stage {
+      position: relative;
+      height: clamp(420px, 62vh, 640px);
+      border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+      background:
+        radial-gradient(circle at 1px 1px, rgba(148,201,174,.16) 1px, transparent 0) 0 0 / 22px 22px,
+        #0a1511;
+      touch-action: none;
+      cursor: grab;
+    }
+    .erd-stage.panning { cursor: grabbing; }
+    .erd-world {
+      position: absolute; left: 0; top: 0;
+      width: 1600px; height: 1100px;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+    .erd-svg {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; overflow: visible;
+    }
+    .erd-svg path {
+      fill: none; stroke: rgba(220,230,225,.55); stroke-width: 1.5;
+    }
+    .erd-svg path.hot {
+      stroke: #95d5b2; stroke-width: 2.2;
+      filter: drop-shadow(0 0 4px rgba(82,183,136,.45));
+    }
+    .erd-table {
+      position: absolute; width: 210px;
+      border: 1px solid rgba(148,201,174,.28);
+      border-radius: 10px; overflow: hidden;
+      background: #15191c;
+      box-shadow: 0 10px 28px rgba(0,0,0,.35);
+      user-select: none;
+      cursor: grab;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+    }
+    .erd-table:hover { border-color: rgba(149,213,178,.55); }
+    .erd-table.selected {
+      border-color: #95d5b2;
+      box-shadow: 0 0 0 1px rgba(149,213,178,.5), 0 16px 36px rgba(0,0,0,.45);
+      z-index: 5;
+    }
+    .erd-table.dragging { cursor: grabbing; z-index: 8; opacity: 0.96; }
+    .erd-th {
+      display: flex; align-items: center; gap: 0.45rem;
+      padding: 0.55rem 0.7rem;
+      background: #1c2226;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      font-weight: 700; font-size: 0.86rem;
+    }
+    .erd-th .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--brand2); box-shadow: 0 0 8px rgba(82,183,136,.6);
+    }
+    .erd-row {
+      display: grid; grid-template-columns: 14px 1fr auto; gap: 0.35rem;
+      align-items: center; padding: 0.28rem 0.65rem;
+      font-size: 0.76rem; border-bottom: 1px solid rgba(255,255,255,.04);
+      color: #d6e5dc;
+    }
+    .erd-row:last-child { border-bottom: none; }
+    .erd-row .pk { color: #f4a261; font-size: 0.65rem; }
+    .erd-row .fk { color: #74c69d; font-size: 0.65rem; }
+    .erd-row .ty { color: #7f9488; font-family: var(--mono); font-size: 0.68rem; }
+    .erd-hint {
+      position: absolute; left: 12px; bottom: 12px; z-index: 6;
+      font-size: 0.78rem; color: var(--muted);
+      background: rgba(7,20,15,.75); border: 1px solid var(--line);
+      border-radius: 999px; padding: 0.35rem 0.7rem;
+      pointer-events: none;
+    }
+    .erd-panel {
+      border: 1px solid var(--line); border-radius: 18px;
+      background: rgba(18,40,32,.85); padding: 1.15rem 1.2rem;
+      display: flex; flex-direction: column; gap: 0.7rem;
+      min-height: 280px;
+    }
+    .erd-panel h3 { margin: 0; font-size: 1.2rem; }
+    .erd-panel .role {
+      margin: 0; color: var(--brand); font-family: var(--mono); font-size: 0.82rem;
+    }
+    .erd-panel p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+    .erd-panel ul { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.88rem; }
+    .erd-panel li { margin: 0.25rem 0; }
+    .erd-panel .sql {
+      margin: 0; padding: 0.7rem 0.8rem; border-radius: 10px;
+      background: #07140f; border: 1px solid var(--line);
+      font-family: var(--mono); font-size: 0.75rem; color: #b7e4c7;
+      white-space: pre-wrap; line-height: 1.45;
+    }
+    .erd-empty { color: var(--muted); font-size: 0.92rem; }
+
+    .viz-scene {
+      margin-top: 0.85rem; padding: 0.75rem 0.85rem;
+      border-radius: 12px; border: 1px solid var(--line);
+      background: rgba(0,0,0,.25);
+      font-family: var(--mono); font-size: 0.78rem; color: #b7e4c7;
+      min-height: 3.2rem; white-space: pre-wrap;
+    }
+
+    .deploy-flow {
+      border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
+      background: #0b1a14; min-height: 260px;
+    }
+    .deploy-flow canvas { width: 100%; height: 100%; display: block; min-height: 260px; }
+
+    footer {
+      margin-top: 4.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line);
+      color: var(--muted); font-size: 0.88rem;
+      display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; justify-content: space-between;
+    }
+
+    @media (max-width: 720px) {
+      .nav-links { display: none; }
+      .hero { min-height: auto; padding-top: 2.2rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="logo" href="#top">
+        <img src="../assets/images/drop-logo.png" alt="" width="34" height="34" />
+        Drop Unpacked
+      </a>
+      <nav class="nav-links">
+        <a href="#loop">요청 루프</a>
+        <a href="#arch">구성</a>
+        <a href="#systems">기능 맵</a>
+        <a href="#schema">스키마</a>
+        <a href="#deploy">배포</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="shell" id="top">
+    <section class="hero">
+      <div>
+        <span class="eyebrow">설명 전용 페이지 · 앱 라우트와 분리</span>
+        <h1>코트 하나를 잡는 순간,<br /><em>Drop은 이렇게 움직인다</em></h1>
+        <p class="lede">
+          <a href="https://ccunpacked.dev/" rel="noopener">ccunpacked.dev</a>처럼 — 한 번에 한 단계만, 애니메이션으로 전환되며 설명합니다.
+          로그인 · RPC 검증 · Realtime · 푸시까지 흐름을 눈으로 따라가 보세요.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-main" href="#loop">루프 재생 ▸</a>
+          <a class="btn btn-ghost" href="../README.md">README</a>
+        </div>
+        <div class="stats" aria-label="규모">
+          <div class="stat"><b data-count="9">0</b><span>코트 실시간 맵</span></div>
+          <div class="stat"><b data-count="500">0</b><span>m 지오펜스</span></div>
+          <div class="stat"><b data-count="15">0</b><span>핵심 테이블</span></div>
+          <div class="stat"><b id="rpc-label">RPC</b><span>서버 측 검증</span></div>
+        </div>
+      </div>
+      <div class="hero-viz" aria-hidden="true">
+        <canvas id="heroCanvas"></canvas>
+      </div>
+    </section>
+
+    <!-- 01 LOOP -->
+    <section class="block" id="loop">
+      <div class="sec-kicker">01 — The Request Loop</div>
+      <h2 class="sec-title">예약 요청이 응답이 되기까지</h2>
+      <p class="sec-sub">탭을 누르는 순간부터 Realtime이 다른 기기 지도를 고치기까지. 자동 재생되거나, 단계를 직접 고르세요.</p>
+
+      <div class="player">
+        <div class="step-rail" id="loopRail" role="tablist" aria-label="요청 루프 단계"></div>
+        <div class="stage">
+          <div class="stage-canvas-wrap">
+            <canvas id="loopCanvas"></canvas>
+          </div>
+          <div class="caption">
+            <div id="loopCaption" class="fade"></div>
+          </div>
+          <div class="controls">
+            <button type="button" class="ctrl" id="btnPlay" aria-pressed="true">⏸ 일시정지</button>
+            <button type="button" class="ctrl on" data-speed="1">1×</button>
+            <button type="button" class="ctrl" data-speed="0.5">0.5×</button>
+            <button type="button" class="ctrl" data-speed="2">2×</button>
+            <div class="progress" aria-hidden="true"><i id="loopBar"></i></div>
+            <span class="prog-label" id="loopProg">1/10</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 ARCH -->
+    <section class="block" id="arch">
+      <div class="sec-kicker">02 — Architecture Explorer</div>
+      <h2 class="sec-title">레이어를 누르면 스택이 펼쳐집니다</h2>
+      <p class="sec-sub">궤도 → 선택 레이어 포커스 → 오른쪽 내부 파이프라인. 데이터가 어느 층으로 흐르는지 애니메이션으로 보세요.</p>
+      <div class="arch">
+        <div class="arch-canvas-box"><canvas id="archCanvas"></canvas></div>
+        <div class="arch-side">
+          <div class="chips" id="archChips"></div>
+          <h3 id="archTitle">Clients</h3>
+          <p id="archBody"></p>
+          <div class="arch-flow"><canvas id="archFlowCanvas"></canvas></div>
+          <div class="chips" id="archTags"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 SYSTEMS -->
+    <section class="block" id="systems">
+      <div class="sec-kicker">03 — Systems</div>
+      <h2 class="sec-title">기능을 고르면 장면이 재생됩니다</h2>
+      <p class="sec-sub">한 번에 한 서브시스템. Canvas가 인증·코트·포인트·레슨·친구·푸시를 각각 다른 시각 언어으로 보여줍니다.</p>
+      <div class="systems-shell">
+        <div class="sys-list" id="sysList" role="tablist"></div>
+        <div class="sys-stage">
+          <div class="sys-canvas-wrap"><canvas id="sysCanvas"></canvas></div>
+          <div class="sys-caption">
+            <div id="sysDetail" class="swap"></div>
+            <div class="sys-steps" id="sysSteps"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 SCHEMA ERD -->
+    <section class="block" id="schema">
+      <div class="sec-kicker">04 — Schema Explorer</div>
+      <h2 class="sec-title">테이블을 잡고 움직여 보세요</h2>
+      <p class="sec-sub">Supabase ERD처럼 박스를 드래그하고, 클릭하면 역할·관계·대표 SQL이 오른쪽에 펼쳐집니다. (휠/핀치로 줌, 빈 곳 드래그로 패닝)</p>
+      <div class="erd-shell">
+        <div class="erd-stage" id="erdStage">
+          <div class="erd-world" id="erdWorld">
+            <svg class="erd-svg" id="erdSvg"></svg>
+          </div>
+          <div class="erd-hint">드래그로 이동 · 클릭으로 설명 · 휠로 줌</div>
+        </div>
+        <aside class="erd-panel" id="erdPanel">
+          <p class="erd-empty">테이블 박스를 선택하면 상세 설명이 여기에 나타납니다.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- 05 DEPLOY -->
+    <section class="block" id="deploy">
+      <div class="sec-kicker">05 — Ship</div>
+      <h2 class="sec-title">코드가 사용자에게 가는 길</h2>
+      <p class="sec-sub">웹은 Cloudflare Pages, 앱은 EAS 클라우드 빌드만 사용합니다. (로컬 eas build 비권장)</p>
+      <div class="deploy-flow"><canvas id="deployCanvas"></canvas></div>
+    </section>
+
+    <footer>
+      <div>Drop Unpacked · 시각 설명 전용 · 서비스 앱에 포함되지 않음</div>
+      <div>
+        <a href="./ARCHITECTURE.md">ARCHITECTURE.md</a> ·
+        <a href="./PRODUCT_SPEC.md">PRODUCT_SPEC</a> ·
+        <a href="https://ccunpacked.dev/" rel="noopener">inspired by ccunpacked.dev</a>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+  (() => {
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* ---------- helpers ---------- */
+    function fitCanvas(canvas, cssH) {
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const w = Math.max(320, rect.width);
+      const h = cssH || Math.max(240, rect.height || 300);
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, w, h };
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function ease(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+    /* ---------- counter ---------- */
+    function animateCounters() {
+      document.querySelectorAll('[data-count]').forEach((el) => {
+        const target = Number(el.dataset.count);
+        const start = performance.now();
+        const dur = reduceMotion ? 1 : 1200;
+        const tick = (now) => {
+          const t = Math.min(1, (now - start) / dur);
+          el.textContent = Math.round(lerp(0, target, ease(t)));
+          if (t < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+    }
+
+    /* ---------- HERO particles + orbit ---------- */
+    function initHero() {
+      const canvas = document.getElementById('heroCanvas');
+      let particles = [];
+      let nodes = [];
+      let t0 = performance.now();
+
+      function rebuild() {
+        const { w, h } = fitCanvas(canvas, canvas.parentElement.clientHeight || 400);
+        particles = Array.from({ length: 48 }, () => ({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: 1 + Math.random() * 2.2,
+          vx: (Math.random() - 0.5) * 0.35,
+          vy: (Math.random() - 0.5) * 0.35,
+          a: 0.2 + Math.random() * 0.5
+        }));
+        const cx = w * 0.5, cy = h * 0.48;
+        nodes = [
+          { label: 'Web', x: cx - 110, y: cy - 70 },
+          { label: 'App', x: cx + 110, y: cy - 70 },
+          { label: 'Stores', x: cx, y: cy },
+          { label: 'RPC', x: cx - 90, y: cy + 85 },
+          { label: 'Realtime', x: cx + 90, y: cy + 85 }
+        ];
+      }
+      rebuild();
+      addEventListener('resize', rebuild);
+
+      function frame(now) {
+        const { ctx, w, h } = (() => {
+          const dpr = Math.min(devicePixelRatio || 1, 2);
+          return {
+            ctx: canvas.getContext('2d'),
+            w: canvas.width / dpr,
+            h: canvas.height / dpr
+          };
+        })();
+        ctx.clearRect(0, 0, w, h);
+
+        // soft rings
+        const pulse = (Math.sin((now - t0) / 900) + 1) / 2;
+        ctx.strokeStyle = `rgba(82,183,136,${0.08 + pulse * 0.1})`;
+        ctx.lineWidth = 1;
+        for (let i = 1; i <= 3; i++) {
+          ctx.beginPath();
+          ctx.arc(w / 2, h * 0.48, 55 + i * 38 + pulse * 6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        particles.forEach((p) => {
+          p.x += p.vx; p.y += p.vy;
+          if (p.x < 0 || p.x > w) p.vx *= -1;
+          if (p.y < 0 || p.y > h) p.vy *= -1;
+          ctx.beginPath();
+          ctx.fillStyle = `rgba(183,228,199,${p.a})`;
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // connect nodes
+        const links = [[0,2],[1,2],[2,3],[2,4],[3,4]];
+        links.forEach(([a, b], i) => {
+          const A = nodes[a], B = nodes[b];
+          const tt = ((now / 1400) + i * 0.2) % 1;
+          ctx.strokeStyle = 'rgba(82,183,136,0.28)';
+          ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+          const px = lerp(A.x, B.x, tt), py = lerp(A.y, B.y, tt);
+          ctx.beginPath();
+          ctx.fillStyle = '#95d5b2';
+          ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        nodes.forEach((n, i) => {
+          const hot = Math.sin(now / 500 + i) * 0.5 + 0.5;
+          roundRect(ctx, n.x - 42, n.y - 18, 84, 36, 10);
+          ctx.fillStyle = `rgba(18,40,32,${0.85 + hot * 0.1})`;
+          ctx.fill();
+          ctx.strokeStyle = `rgba(149,213,178,${0.35 + hot * 0.4})`;
+          ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = '600 13px Instrument Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(n.label, n.x, n.y);
+        });
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    /* ---------- LOOP STEPS ---------- */
+    const loopSteps = [
+      {
+        title: '사용자 탭',
+        body: '코트 카드에서 예약·모드·게임 수를 고릅니다. UI는 courtStore에 의도를 보냅니다.',
+        tags: ['CourtExpandView', 'courtStore'],
+        nodes: ['User', 'UI', 'Store'],
+        lay: { User: [0.18, 0.5], UI: [0.42, 0.38], Store: [0.68, 0.55] },
+        scene: 'UI: onReserve(court=5, mode=casual)\nStore ← intent'
+      },
+      {
+        title: '클라이언트 가드',
+        body: '활동 시간·지오펜스(약 500m)·잔액 UI를 먼저 검사합니다. 실패하면 RPC까지 가지 않습니다.',
+        tags: ['geofence', 'activity window'],
+        nodes: ['UI', 'Geo', 'Store'],
+        lay: { UI: [0.28, 0.32], Geo: [0.5, 0.62], Store: [0.72, 0.38] },
+        scene: 'if dist > 500m → reject\nif outside Tue/Thu window → guide'
+      },
+      {
+        title: '낙관적 UI',
+        body: '로딩 체감을 줄이려 화면을 잠정 반영합니다. 진짜 확정은 아직 서버입니다.',
+        tags: ['optimistic'],
+        nodes: ['Store', 'UI'],
+        lay: { Store: [0.35, 0.5], UI: [0.68, 0.5] },
+        scene: 'courts[5].status = "reserved?" (local)\nawait rpc…'
+      },
+      {
+        title: 'RPC 호출',
+        body: 'services가 rpc_reserve_court를 호출합니다. anon 키로 Postgres에 직접 UPDATE하지 않습니다.',
+        tags: ['rpc_reserve_court'],
+        nodes: ['Store', 'Services', 'RPC'],
+        lay: { Store: [0.2, 0.55], Services: [0.48, 0.35], RPC: [0.78, 0.55] },
+        scene: 'select rpc_reserve_court(\n  court_id := 5,\n  mode := \'casual\'\n);'
+      },
+      {
+        title: '서버 재검증',
+        body: 'Security Definer RPC가 위치·포인트·피크타임·코치코트 자격을 다시 검사합니다.',
+        tags: ['500m', 'peak limit', 'points'],
+        nodes: ['RPC', 'Rules'],
+        lay: { RPC: [0.35, 0.42], Rules: [0.7, 0.58] },
+        scene: 'CHECK geo ∧ points ≥ cost\nCHECK peak_reservations < 2'
+      },
+      {
+        title: '상태 기록',
+        body: 'courts 행과 point_transactions 원장이 함께 갱신됩니다. profiles.points는 트리거/RPC만 올립니다.',
+        tags: ['courts', 'point_transactions'],
+        nodes: ['RPC', 'DB'],
+        lay: { RPC: [0.28, 0.45], DB: [0.72, 0.5] },
+        scene: 'UPDATE courts SET status=\'reserved\'…\nINSERT point_transactions(delta=-20);\nUPDATE profiles.points'
+      },
+      {
+        title: 'Realtime 방송',
+        body: 'row change가 Realtime 채널로 나갑니다. 열어 둔 모든 클라이언트의 stores가 구독 중입니다.',
+        tags: ['supabase realtime'],
+        nodes: ['DB', 'Realtime'],
+        lay: { DB: [0.3, 0.4], Realtime: [0.72, 0.58] },
+        scene: 'postgres_changes\n  table=courts  event=UPDATE\n→ broadcast channel'
+      },
+      {
+        title: '지도 동기화',
+        body: '다른 웹/앱의 9코트 맵이 같은 상태로 맞춰집니다. “누가 선점했는지”가 즉시 보입니다.',
+        tags: ['Web', 'Android'],
+        nodes: ['Realtime', 'Others', 'UI'],
+        lay: { Realtime: [0.25, 0.45], Others: [0.55, 0.65], UI: [0.78, 0.35] },
+        scene: 'OtherStore.merge(court#5)\nWeb map + Android map sync'
+      },
+      {
+        title: '알림 생성',
+        body: '합류 수락 등이면 notifications INSERT. 인앱 알림함도 Realtime으로 갱신됩니다.',
+        tags: ['notifications'],
+        nodes: ['DB', 'Notif'],
+        lay: { DB: [0.3, 0.4], Notif: [0.7, 0.55] },
+        scene: 'INSERT INTO notifications\n  (user_id, title, kind)…'
+      },
+      {
+        title: '원격 푸시',
+        body: '트리거 → Edge send-push → push_tokens → Expo Push → FCM. 웹 단독에는 OS 푸시가 없습니다.',
+        tags: ['send-push', 'FCM'],
+        nodes: ['Notif', 'Edge', 'Phone'],
+        lay: { Notif: [0.2, 0.55], Edge: [0.5, 0.35], Phone: [0.8, 0.55] },
+        scene: 'Edge: Expo Push API\n→ FCM V1 → device banner'
+      }
+    ];
+
+    const allLoopNodes = ['User', 'UI', 'Store', 'Geo', 'Services', 'RPC', 'Rules', 'DB', 'Realtime', 'Others', 'Notif', 'Edge', 'Phone'];
+    const homePos = {
+      User: [0.08, 0.72], UI: [0.18, 0.28], Store: [0.3, 0.55], Geo: [0.18, 0.78],
+      Services: [0.42, 0.28], RPC: [0.55, 0.5], Rules: [0.55, 0.78], DB: [0.7, 0.28],
+      Realtime: [0.78, 0.52], Others: [0.42, 0.78], Notif: [0.78, 0.78],
+      Edge: [0.42, 0.12], Phone: [0.22, 0.12]
+    };
+
+    function initLoop() {
+      const rail = document.getElementById('loopRail');
+      const caption = document.getElementById('loopCaption');
+      const bar = document.getElementById('loopBar');
+      const prog = document.getElementById('loopProg');
+      const canvas = document.getElementById('loopCanvas');
+      const playBtn = document.getElementById('btnPlay');
+
+      let idx = 0;
+      let playing = !reduceMotion;
+      let speed = 1;
+      let since = performance.now();
+      const dwell = 3400;
+      let packetT = 0;
+      let morph = 1;
+      let morphFrom = {};
+      let morphTo = {};
+      let current = {};
+
+      allLoopNodes.forEach((k) => {
+        current[k] = { x: homePos[k][0], y: homePos[k][1], s: 0.55 };
+        morphFrom[k] = { ...current[k] };
+        morphTo[k] = { ...current[k] };
+      });
+
+      rail.innerHTML = loopSteps.map((s, i) =>
+        `<button type="button" class="step-chip${i === 0 ? ' active' : ''}" data-i="${i}" role="tab">
+          <span class="n">${String(i + 1).padStart(2, '0')}</span>
+          <span class="t">${s.title}</span>
+        </button>`
+      ).join('');
+
+      function targetLayout(step) {
+        const out = {};
+        allLoopNodes.forEach((k) => {
+          if (step.lay[k]) {
+            out[k] = { x: step.lay[k][0], y: step.lay[k][1], s: 1 };
+          } else if (step.nodes.includes(k)) {
+            out[k] = { x: homePos[k][0], y: homePos[k][1], s: 0.95 };
+          } else {
+            // park inactive towards edges, smaller
+            out[k] = {
+              x: lerp(homePos[k][0], homePos[k][0] < 0.5 ? 0.04 : 0.96, 0.35),
+              y: lerp(homePos[k][1], homePos[k][1] < 0.5 ? 0.08 : 0.92, 0.25),
+              s: 0.42
+            };
+          }
+        });
+        return out;
+      }
+
+      function setCaption(i, animate = true) {
+        const s = loopSteps[i];
+        caption.classList.remove('fade');
+        void caption.offsetWidth;
+        if (animate) caption.classList.add('fade');
+        caption.innerHTML = `
+          <h3>${i + 1}. ${s.title}</h3>
+          <p>${s.body}</p>
+          <div class="viz-scene">${s.scene}</div>
+          <div class="meta">${s.tags.map((t) => `<span class="tag">${t}</span>`).join('')}</div>`;
+        rail.querySelectorAll('.step-chip').forEach((el, j) => el.classList.toggle('active', j === i));
+        prog.textContent = `${i + 1}/${loopSteps.length}`;
+      }
+
+      function go(i) {
+        morphFrom = {};
+        allLoopNodes.forEach((k) => { morphFrom[k] = { ...current[k] }; });
+        idx = (i + loopSteps.length) % loopSteps.length;
+        morphTo = targetLayout(loopSteps[idx]);
+        morph = 0;
+        packetT = 0;
+        setCaption(idx);
+        since = performance.now();
+      }
+
+      rail.addEventListener('click', (e) => {
+        const b = e.target.closest('.step-chip');
+        if (!b) return;
+        go(Number(b.dataset.i));
+      });
+
+      playBtn.addEventListener('click', () => {
+        playing = !playing;
+        playBtn.textContent = playing ? '⏸ 일시정지' : '▶ 재생';
+        playBtn.setAttribute('aria-pressed', String(playing));
+        since = performance.now();
+      });
+
+      document.querySelectorAll('[data-speed]').forEach((b) => {
+        b.addEventListener('click', () => {
+          speed = Number(b.dataset.speed);
+          document.querySelectorAll('[data-speed]').forEach((x) => x.classList.toggle('on', x === b));
+          since = performance.now();
+        });
+      });
+
+      function resize() {
+        fitCanvas(canvas, Math.max(260, canvas.parentElement.clientHeight || 300));
+      }
+      resize();
+      addEventListener('resize', resize);
+
+      // start first morph
+      morphTo = targetLayout(loopSteps[0]);
+      morph = reduceMotion ? 1 : 0;
+      setCaption(0, false);
+
+      function draw(now) {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width / dpr;
+        const h = canvas.height / dpr;
+        ctx.clearRect(0, 0, w, h);
+
+        if (morph < 1) {
+          morph = Math.min(1, morph + (reduceMotion ? 1 : 0.045 * speed));
+        }
+        const mt = ease(morph);
+        allLoopNodes.forEach((k) => {
+          const a = morphFrom[k] || morphTo[k];
+          const b = morphTo[k];
+          current[k] = {
+            x: lerp(a.x, b.x, mt),
+            y: lerp(a.y, b.y, mt),
+            s: lerp(a.s, b.s, mt)
+          };
+        });
+
+        const step = loopSteps[idx];
+        const active = new Set(step.nodes);
+
+        // soft guide path
+        const order = step.nodes;
+        packetT = (packetT + 0.01 * speed) % 1;
+        for (let i = 0; i < order.length - 1; i++) {
+          const A = current[order[i]], B = current[order[i + 1]];
+          const ax = A.x * w, ay = A.y * h, bx = B.x * w, by = B.y * h;
+          ctx.strokeStyle = 'rgba(82,183,136,0.4)';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          const mx = (ax + bx) / 2, my = (ay + by) / 2 - 18;
+          ctx.moveTo(ax, ay);
+          ctx.quadraticCurveTo(mx, my, bx, by);
+          ctx.stroke();
+
+          // staggered packets per edge
+          const t = (packetT + i * 0.22) % 1;
+          const px = (1 - t) * (1 - t) * ax + 2 * (1 - t) * t * mx + t * t * bx;
+          const py = (1 - t) * (1 - t) * ay + 2 * (1 - t) * t * my + t * t * by;
+          ctx.beginPath();
+          ctx.fillStyle = '#b7e4c7';
+          ctx.shadowColor = 'rgba(82,183,136,0.9)';
+          ctx.shadowBlur = 14;
+          ctx.arc(px, py, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        // draw inactive first
+        allLoopNodes
+          .slice()
+          .sort((a, b) => (active.has(a) ? 1 : 0) - (active.has(b) ? 1 : 0))
+          .forEach((k) => {
+            const n = current[k];
+            const on = active.has(k);
+            const pulse = on ? (Math.sin(now / 280) * 0.5 + 0.5) : 0;
+            const r = (on ? 30 : 16) * n.s + pulse * 3;
+            const x = n.x * w, y = n.y * h;
+
+            if (on) {
+              ctx.beginPath();
+              ctx.fillStyle = `rgba(82,183,136,${0.08 + pulse * 0.08})`;
+              ctx.arc(x, y, r + 14, 0, Math.PI * 2);
+              ctx.fill();
+            }
+
+            roundRect(ctx, x - r * 1.35, y - r * 0.7, r * 2.7, r * 1.4, 12);
+            ctx.fillStyle = on ? 'rgba(82,183,136,0.28)' : 'rgba(255,255,255,0.03)';
+            ctx.fill();
+            ctx.strokeStyle = on ? '#95d5b2' : 'rgba(148,201,174,0.18)';
+            ctx.lineWidth = on ? 2.2 : 1;
+            ctx.stroke();
+
+            ctx.fillStyle = on ? '#e8f6ee' : '#5f7a6c';
+            ctx.font = `${on ? 700 : 500} ${Math.max(10, 11 * n.s + (on ? 2 : 0))}px JetBrains Mono, monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(k, x, y);
+          });
+
+        if (playing && morph >= 1) {
+          const elapsed = (now - since) * speed;
+          const t = Math.min(1, elapsed / dwell);
+          bar.style.width = `${t * 100}%`;
+          if (t >= 1) go(idx + 1);
+        } else if (!playing) {
+          bar.style.width = '0%';
+        }
+
+        requestAnimationFrame(draw);
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    /* ---------- ARCH ---------- */
+    const archLayers = [
+      {
+        id: 'clients',
+        title: 'Clients',
+        short: 'Clients',
+        body: '동일 Expo Router 코드베이스. 웹은 Cloudflare Pages static, Android는 EAS preview APK / production AAB.',
+        tags: ['Cloudflare Pages', 'EAS', 'Expo 57'],
+        pipeline: ['Web', 'Android', 'Expo Router', 'UI'],
+        color: '#74c69d'
+      },
+      {
+        id: 'app',
+        title: 'App layer',
+        short: 'App',
+        body: 'app/ 화면 → Zustand stores → services/. UI는 낙관 갱신, 확정은 RPC·Realtime이 맞춥니다.',
+        tags: ['Expo Router', 'Zustand', 'services/'],
+        pipeline: ['UI', 'Store', 'Service', 'RPC call'],
+        color: '#95d5b2'
+      },
+      {
+        id: 'supabase',
+        title: 'Supabase',
+        short: 'Supabase',
+        body: 'Auth · Postgres+RLS · Security Definer RPC · Realtime · Storage · Edge send-push.',
+        tags: ['Auth', 'RLS', 'RPC', 'Realtime'],
+        pipeline: ['Auth', 'RPC', 'Postgres', 'Realtime'],
+        color: '#52b788'
+      },
+      {
+        id: 'push',
+        title: 'Push path',
+        short: 'Push',
+        body: 'notifications INSERT → Edge send-push → push_tokens → Expo Push → FCM. 웹은 인앱만.',
+        tags: ['Edge', 'Expo Push', 'FCM V1'],
+        pipeline: ['INSERT', 'Edge', 'Expo', 'FCM', 'Phone'],
+        color: '#b7e4c7'
+      },
+      {
+        id: 'rules',
+        title: 'Hard rules',
+        short: 'Rules',
+        body: '민감 쓰기는 클라이언트 UPDATE 금지. 지오펜스·비용·권한은 서버 RPC. 원장은 point_transactions.',
+        tags: ['geofence', '006_secure_points'],
+        pipeline: ['Client ✕', 'RPC ✓', 'Ledger', 'RLS'],
+        color: '#f4a261'
+      }
+    ];
+
+    function initArch() {
+      const canvas = document.getElementById('archCanvas');
+      const flowCanvas = document.getElementById('archFlowCanvas');
+      const chips = document.getElementById('archChips');
+      const title = document.getElementById('archTitle');
+      const body = document.getElementById('archBody');
+      const tags = document.getElementById('archTags');
+      let sel = 0;
+      let hover = -1;
+      let morph = 1;
+      const nodes = archLayers.map((l) => ({
+        ...l,
+        x: 0, y: 0, tx: 0, ty: 0, fx: 0, fy: 0, s: 1, ts: 1
+      }));
+
+      chips.innerHTML = archLayers.map((l, i) =>
+        `<button type="button" class="layer-btn${i === 0 ? ' active' : ''}" data-i="${i}">${l.short}</button>`
+      ).join('');
+
+      function show(i) {
+        sel = i;
+        morph = 0;
+        nodes.forEach((n) => {
+          n.fx = n.x; n.fy = n.y; n.fs = n.s || 1;
+        });
+        const l = archLayers[i];
+        title.textContent = l.title;
+        body.textContent = l.body;
+        tags.innerHTML = l.tags.map((t) => `<span class="tag">${t}</span>`).join('');
+        chips.querySelectorAll('.layer-btn').forEach((b, j) => b.classList.toggle('active', j === i));
+        layoutTargets();
+      }
+
+      function layoutTargets() {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const w = canvas.width / dpr;
+        const h = canvas.height / dpr;
+        const cx = w / 2, cy = h / 2;
+        const R = Math.min(w, h) * 0.34;
+        nodes.forEach((n, i) => {
+          const a = -Math.PI / 2 + (i / nodes.length) * Math.PI * 2;
+          let x = cx + Math.cos(a) * R;
+          let y = cy + Math.sin(a) * R;
+          let s = 0.78;
+          if (i === sel) {
+            // pull selected toward hub + scale up
+            x = lerp(x, cx, 0.42);
+            y = lerp(y, cy - 8, 0.42);
+            s = 1.35;
+          } else {
+            // push others slightly out
+            x = cx + Math.cos(a) * R * 1.08;
+            y = cy + Math.sin(a) * R * 1.08;
+            s = 0.72;
+          }
+          n.tx = x; n.ty = y; n.ts = s;
+          if (!n.x) { n.x = x; n.y = y; n.fx = x; n.fy = y; n.s = s; }
+        });
+      }
+
+      function rebuild() {
+        fitCanvas(canvas, Math.max(400, canvas.parentElement.clientHeight || 400));
+        fitCanvas(flowCanvas, Math.max(120, flowCanvas.parentElement.clientHeight || 120));
+        layoutTargets();
+        nodes.forEach((n) => {
+          n.x = n.tx; n.y = n.ty; n.fx = n.tx; n.fy = n.ty; n.s = n.ts;
+        });
+        morph = 1;
+      }
+      rebuild();
+      addEventListener('resize', rebuild);
+      show(0);
+
+      chips.addEventListener('click', (e) => {
+        const b = e.target.closest('.layer-btn');
+        if (b) show(Number(b.dataset.i));
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        hover = nodes.findIndex((n) => (n.x - x) ** 2 + (n.y - y) ** 2 < (38 * n.s) ** 2);
+        canvas.style.cursor = hover >= 0 ? 'pointer' : 'default';
+      });
+      canvas.addEventListener('click', () => {
+        if (hover >= 0) show(hover);
+      });
+
+      function drawFlow(now) {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const ctx = flowCanvas.getContext('2d');
+        const w = flowCanvas.width / dpr;
+        const h = flowCanvas.height / dpr;
+        ctx.clearRect(0, 0, w, h);
+        const pipe = archLayers[sel].pipeline;
+        const n = pipe.length;
+        const pad = 28;
+        const gap = (w - pad * 2) / Math.max(1, n - 1);
+        const y = h * 0.42;
+        const pts = pipe.map((label, i) => ({ label, x: pad + i * gap, y }));
+
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i], b = pts[i + 1];
+          ctx.strokeStyle = 'rgba(82,183,136,0.35)';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          const t = (now / 1400 + i * 0.2) % 1;
+          const px = lerp(a.x, b.x, t), py = lerp(a.y, b.y, t);
+          ctx.beginPath();
+          ctx.fillStyle = archLayers[sel].color;
+          ctx.shadowColor = archLayers[sel].color;
+          ctx.shadowBlur = 10;
+          ctx.arc(px, py, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        pts.forEach((p, i) => {
+          const on = Math.floor(((now / 1400) % 1) * n) === i;
+          roundRect(ctx, p.x - 34, p.y - 16, 68, 32, 10);
+          ctx.fillStyle = on ? 'rgba(82,183,136,0.28)' : 'rgba(255,255,255,0.04)';
+          ctx.fill();
+          ctx.strokeStyle = on ? '#95d5b2' : 'rgba(148,201,174,0.25)';
+          ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = '600 10px JetBrains Mono, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.label, p.x, p.y);
+        });
+      }
+
+      function frame(now) {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width / dpr;
+        const h = canvas.height / dpr;
+        ctx.clearRect(0, 0, w, h);
+
+        if (morph < 1) morph = Math.min(1, morph + (reduceMotion ? 1 : 0.055));
+        const mt = ease(morph);
+        nodes.forEach((n) => {
+          n.x = lerp(n.fx, n.tx, mt);
+          n.y = lerp(n.fy, n.ty, mt);
+          n.s = lerp(n.fs ?? 1, n.ts, mt);
+        });
+
+        const cx = w / 2, cy = h / 2;
+
+        // rotating dashed ring
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(now / 6000);
+        ctx.strokeStyle = 'rgba(82,183,136,0.14)';
+        ctx.setLineDash([6, 10]);
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.min(w, h) * 0.34, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // soft sweep
+        const sweep = (now / 2800) % 1;
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(149,213,178,${0.12 + Math.sin(sweep * Math.PI) * 0.1})`;
+        ctx.lineWidth = 18;
+        ctx.arc(cx, cy, Math.min(w, h) * 0.34, sweep * Math.PI * 2, sweep * Math.PI * 2 + 0.7);
+        ctx.stroke();
+
+        // edges through hub
+        nodes.forEach((n, i) => {
+          const hot = i === sel;
+          ctx.strokeStyle = hot ? 'rgba(149,213,178,0.55)' : 'rgba(148,201,174,0.12)';
+          ctx.lineWidth = hot ? 2.2 : 1;
+          ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(cx, cy); ctx.stroke();
+          if (hot) {
+            const t = (now / 1100) % 1;
+            const px = lerp(n.x, cx, t), py = lerp(n.y, cy, t);
+            ctx.beginPath();
+            ctx.fillStyle = n.color;
+            ctx.shadowBlur = 12; ctx.shadowColor = n.color;
+            ctx.arc(px, py, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+        });
+
+        // hub
+        const hubPulse = (Math.sin(now / 500) + 1) / 2;
+        roundRect(ctx, cx - 50, cy - 24, 100, 48, 14);
+        ctx.fillStyle = `rgba(82,183,136,${0.12 + hubPulse * 0.1})`;
+        ctx.fill();
+        ctx.strokeStyle = '#95d5b2';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = '#e8f6ee';
+        ctx.font = '700 15px Instrument Sans, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Drop', cx, cy);
+
+        // nodes
+        nodes.forEach((n, i) => {
+          const on = i === sel || i === hover;
+          const r = 28 * n.s + (on ? 4 : 0);
+          if (on) {
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(82,183,136,${0.08 + hubPulse * 0.06})`;
+            ctx.arc(n.x, n.y, r + 16, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.beginPath();
+          ctx.fillStyle = on ? 'rgba(82,183,136,0.3)' : 'rgba(18,40,32,0.92)';
+          ctx.strokeStyle = on ? n.color : 'rgba(148,201,174,0.3)';
+          ctx.lineWidth = on ? 2.6 : 1.2;
+          ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+          ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = `${on ? 700 : 600} ${11 + (on ? 2 : 0)}px Instrument Sans, sans-serif`;
+          ctx.fillText(n.short, n.x, n.y);
+        });
+
+        drawFlow(now);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    /* ---------- SYSTEMS ---------- */
+    const systems = [
+      {
+        code: 'AUTH',
+        title: '인증 · 등급',
+        blurb: '학번 / 게스트 / 관리자',
+        detail: `<strong>학번</strong>은 가상 이메일 <code>drop-{학번}@example.com</code> + 비밀번호.
+          마이그레이션 <code>013</code> 이후 신규는 보통 준회원·승인. <strong>게스트</strong>는 Anonymous + <code>rpc_setup_guest_profile</code>.`,
+        steps: ['입력', 'Auth', 'profiles', '가드'],
+        scene: 'auth'
+      },
+      {
+        code: 'COURT',
+        title: '코트 · 합류',
+        blurb: '9코트 · 낙관 UI · RPC',
+        detail: `예약 → <code>rpc_reserve_court</code> → courts + 포인트 차감 → Realtime.
+          합류는 <code>join_requests</code>. 난타는 Elo 미반영.`,
+        steps: ['탭', '가드', 'RPC', '맵 동기'],
+        scene: 'court'
+      },
+      {
+        code: 'PTS',
+        title: '출석 · 포인트',
+        blurb: '원장은 서버만',
+        detail: `출석 <code>rpc_check_in</code>, 청소 <code>rpc_submit_cleaning</code>.
+          잔액은 <code>profiles.points</code>지만 클라이언트 상향 불가.`,
+        steps: ['지오', 'RPC', '원장', '잔액'],
+        scene: 'points'
+      },
+      {
+        code: 'LESSON',
+        title: '레슨 대기열',
+        blurb: 'pending → next → active',
+        detail: `입금 확인 후 <code>lesson_queue</code>. next → 사이렌 · 3번 코치코트.
+          공지는 <code>is_coach</code> / admin.`,
+        steps: ['대기', 'next', '사이렌', '코트3'],
+        scene: 'lesson'
+      },
+      {
+        code: 'SOCIAL',
+        title: '친구 · 로비',
+        blurb: 'presence · team_rooms',
+        detail: `친구는 즐겨찾기 + <code>is_at_gym</code> 정렬. 신청은 <code>friend_requests</code>.
+          파트너 모집은 <code>team_rooms</code>.`,
+        steps: ['신청', '수락', 'presence', '로비'],
+        scene: 'social'
+      },
+      {
+        code: 'PUSH',
+        title: '알림 · 푸시',
+        blurb: '인앱 ≠ OS 푸시',
+        detail: `인앱: notificationStore + Realtime.
+          원격: 토큰 → Edge <code>send-push</code> → Expo → FCM.`,
+        steps: ['INSERT', 'Edge', 'Expo', 'FCM'],
+        scene: 'push'
+      }
+    ];
+
+    function initSystems() {
+      const list = document.getElementById('sysList');
+      const detail = document.getElementById('sysDetail');
+      const stepsEl = document.getElementById('sysSteps');
+      const canvas = document.getElementById('sysCanvas');
+      let sel = 0;
+      let phase = 0;
+      let since = performance.now();
+      const phaseMs = 1600;
+
+      list.innerHTML = systems.map((s, i) =>
+        `<button type="button" class="sys-item${i === 0 ? ' active' : ''}" data-i="${i}" role="tab">
+          <span class="code">${s.code}</span>
+          <span class="ttl">${s.title}</span>
+          <span class="sub">${s.blurb}</span>
+        </button>`
+      ).join('');
+
+      function show(i) {
+        sel = i;
+        phase = 0;
+        since = performance.now();
+        const s = systems[i];
+        list.querySelectorAll('.sys-item').forEach((el, j) => el.classList.toggle('active', j === i));
+        detail.classList.remove('swap');
+        void detail.offsetWidth;
+        detail.classList.add('swap');
+        detail.innerHTML = `<h3>${s.title}</h3><p>${s.detail}</p>`;
+        stepsEl.innerHTML = s.steps.map((st, j) =>
+          `<span class="sys-step${j === 0 ? ' on' : ''}" data-j="${j}">${j + 1}. ${st}</span>`
+        ).join('');
+      }
+      show(0);
+
+      list.addEventListener('click', (e) => {
+        const b = e.target.closest('.sys-item');
+        if (b) show(Number(b.dataset.i));
+      });
+
+      function resize() {
+        fitCanvas(canvas, Math.max(260, canvas.parentElement.clientHeight || 280));
+      }
+      resize();
+      addEventListener('resize', resize);
+
+      function drawAuth(ctx, w, h, t, p) {
+        const boxes = [
+          { l: '학번·비번', x: 0.18 },
+          { l: 'Supabase Auth', x: 0.5 },
+          { l: 'profiles', x: 0.82 }
+        ];
+        boxes.forEach((b, i) => {
+          const on = p >= i;
+          const x = b.x * w, y = h * 0.45;
+          roundRect(ctx, x - 55, y - 28, 110, 56, 12);
+          ctx.fillStyle = on ? 'rgba(82,183,136,0.25)' : 'rgba(255,255,255,0.04)';
+          ctx.fill();
+          ctx.strokeStyle = on ? '#95d5b2' : 'rgba(148,201,174,0.25)';
+          ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = '600 12px Instrument Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(b.l, x, y);
+          if (i < boxes.length - 1) {
+            const nx = boxes[i + 1].x * w;
+            ctx.strokeStyle = p > i ? 'rgba(149,213,178,0.55)' : 'rgba(148,201,174,0.2)';
+            ctx.beginPath(); ctx.moveTo(x + 55, y); ctx.lineTo(nx - 55, y); ctx.stroke();
+            if (p === i) {
+              const px = lerp(x + 55, nx - 55, t);
+              ctx.beginPath(); ctx.fillStyle = '#b7e4c7';
+              ctx.arc(px, y, 5, 0, Math.PI * 2); ctx.fill();
+            }
+          }
+        });
+        ctx.fillStyle = '#8fb5a1';
+        ctx.font = '500 11px JetBrains Mono, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(p >= 3 ? '→ tabs /admin 가드' : '세션 생성 중…', 20, h - 20);
+      }
+
+      function drawCourt(ctx, w, h, t, p) {
+        const size = Math.min(w * 0.55, h * 0.7);
+        const x0 = (w - size) / 2 - 20;
+        const y0 = (h - size) / 2;
+        const cell = size / 3;
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            const id = r * 3 + c;
+            const reserved = p >= 2 && id === 4;
+            const syncing = p >= 3 && id === 4;
+            roundRect(ctx, x0 + c * cell + 4, y0 + r * cell + 4, cell - 8, cell - 8, 8);
+            ctx.fillStyle = reserved
+              ? `rgba(82,183,136,${0.25 + (syncing ? Math.sin(t * Math.PI) * 0.15 : 0)})`
+              : 'rgba(255,255,255,0.04)';
+            ctx.fill();
+            ctx.strokeStyle = reserved ? '#95d5b2' : 'rgba(148,201,174,0.22)';
+            ctx.stroke();
+            ctx.fillStyle = reserved ? '#b7e4c7' : '#6f9080';
+            ctx.font = '600 11px JetBrains Mono, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(id + 1), x0 + c * cell + cell / 2, y0 + r * cell + cell / 2);
+          }
+        }
+        // RPC badge
+        const bx = w * 0.86, by = h * 0.3;
+        roundRect(ctx, bx - 42, by - 20, 84, 40, 10);
+        ctx.fillStyle = p >= 1 ? 'rgba(244,162,97,0.2)' : 'rgba(255,255,255,0.04)';
+        ctx.fill();
+        ctx.strokeStyle = p >= 1 ? '#f4a261' : 'rgba(148,201,174,0.25)';
+        ctx.stroke();
+        ctx.fillStyle = '#e8f6ee';
+        ctx.font = '600 11px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(p >= 1 ? 'RPC' : '…', bx, by);
+        if (p === 1) {
+          const cx = x0 + 1.5 * cell, cy = y0 + 1.5 * cell;
+          const px = lerp(bx - 42, cx, t), py = lerp(by, cy, t);
+          ctx.beginPath(); ctx.fillStyle = '#f4a261';
+          ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      function drawPoints(ctx, w, h, t, p) {
+        // balance meter + ledger rows
+        const bal = p === 0 ? 100 : p === 1 ? 100 : p === 2 ? 100 + Math.floor(t * 50) : 150;
+        roundRect(ctx, w * 0.1, h * 0.2, w * 0.35, 70, 14);
+        ctx.fillStyle = 'rgba(82,183,136,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = '#74c69d';
+        ctx.stroke();
+        ctx.fillStyle = '#8fb5a1';
+        ctx.font = '500 11px JetBrains Mono, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('profiles.points', w * 0.1 + 14, h * 0.2 + 22);
+        ctx.fillStyle = '#e8f6ee';
+        ctx.font = '700 28px JetBrains Mono, monospace';
+        ctx.fillText(String(bal), w * 0.1 + 14, h * 0.2 + 52);
+
+        const rows = [
+          { d: '+150', why: 'check_in' },
+          { d: '-20', why: 'reserve' },
+          { d: '+100', why: 'cleaning' }
+        ];
+        rows.forEach((r, i) => {
+          const y = h * 0.25 + i * 42;
+          const on = p >= 2 && i <= Math.floor(p === 2 ? t * 3 : 3);
+          roundRect(ctx, w * 0.55, y, w * 0.35, 34, 8);
+          ctx.fillStyle = on ? 'rgba(82,183,136,0.18)' : 'rgba(255,255,255,0.03)';
+          ctx.fill();
+          ctx.strokeStyle = on ? '#95d5b2' : 'rgba(148,201,174,0.2)';
+          ctx.stroke();
+          ctx.fillStyle = on ? '#b7e4c7' : '#6f9080';
+          ctx.font = '600 12px JetBrains Mono, monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText(`${r.d}  ${r.why}`, w * 0.55 + 12, y + 18);
+        });
+        if (p === 0) {
+          // geo ring
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(149,213,178,${0.3 + t * 0.4})`;
+          ctx.arc(w * 0.27, h * 0.65, 28 + t * 10, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = '#8fb5a1';
+          ctx.font = '500 11px JetBrains Mono, monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('500m', w * 0.27, h * 0.65);
+        }
+      }
+
+      function drawLesson(ctx, w, h, t, p) {
+        const states = ['waiting', 'next', 'siren', 'court#3'];
+        states.forEach((s, i) => {
+          const x = w * (0.15 + i * 0.22);
+          const y = h * 0.45;
+          const on = p >= i;
+          const hot = p === i;
+          roundRect(ctx, x - 48, y - 28, 96, 56, 12);
+          ctx.fillStyle = on ? (hot ? 'rgba(244,162,97,0.25)' : 'rgba(82,183,136,0.2)') : 'rgba(255,255,255,0.04)';
+          ctx.fill();
+          ctx.strokeStyle = on ? (hot ? '#f4a261' : '#95d5b2') : 'rgba(148,201,174,0.2)';
+          ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = '600 11px JetBrains Mono, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(s, x, y);
+          if (i < states.length - 1) {
+            ctx.strokeStyle = p > i ? 'rgba(149,213,178,0.5)' : 'rgba(148,201,174,0.2)';
+            ctx.beginPath(); ctx.moveTo(x + 48, y); ctx.lineTo(x + w * 0.22 - 48, y); ctx.stroke();
+          }
+          if (hot && i === 2) {
+            // siren pulse
+            ctx.beginPath();
+            ctx.strokeStyle = `rgba(244,162,97,${0.4 + Math.sin(t * Math.PI * 4) * 0.4})`;
+            ctx.arc(x, y, 40 + t * 8, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        });
+      }
+
+      function drawSocial(ctx, w, h, t, p) {
+        const people = [
+          { x: 0.25, y: 0.35, gym: true },
+          { x: 0.45, y: 0.55, gym: p >= 2 },
+          { x: 0.65, y: 0.32, gym: false },
+          { x: 0.78, y: 0.6, gym: p >= 3 }
+        ];
+        // links
+        if (p >= 1) {
+          ctx.strokeStyle = 'rgba(149,213,178,0.35)';
+          ctx.beginPath();
+          ctx.moveTo(people[0].x * w, people[0].y * h);
+          ctx.lineTo(people[1].x * w, people[1].y * h);
+          ctx.stroke();
+          if (p >= 1) {
+            const px = lerp(people[0].x * w, people[1].x * w, t);
+            const py = lerp(people[0].y * h, people[1].y * h, t);
+            ctx.beginPath(); ctx.fillStyle = '#95d5b2';
+            ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        people.forEach((u, i) => {
+          const x = u.x * w, y = u.y * h;
+          ctx.beginPath();
+          ctx.fillStyle = u.gym ? 'rgba(82,183,136,0.35)' : 'rgba(255,255,255,0.08)';
+          ctx.strokeStyle = u.gym ? '#95d5b2' : 'rgba(148,201,174,0.3)';
+          ctx.lineWidth = 2;
+          ctx.arc(x, y, 18, 0, Math.PI * 2);
+          ctx.fill(); ctx.stroke();
+          if (u.gym) {
+            ctx.beginPath();
+            ctx.fillStyle = '#52b788';
+            ctx.arc(x + 12, y - 12, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+        // room card
+        if (p >= 3) {
+          roundRect(ctx, w * 0.12, h * 0.72, w * 0.4, 40, 10);
+          ctx.fillStyle = 'rgba(82,183,136,0.15)';
+          ctx.fill();
+          ctx.strokeStyle = '#74c69d';
+          ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = '600 12px Instrument Sans, sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('team_rooms · open', w * 0.12 + 12, h * 0.72 + 20);
+        }
+      }
+
+      function drawPush(ctx, w, h, t, p) {
+        const pipe = [
+          { l: 'notif', x: 0.12 },
+          { l: 'Edge', x: 0.34 },
+          { l: 'Expo', x: 0.56 },
+          { l: 'FCM', x: 0.78 }
+        ];
+        pipe.forEach((b, i) => {
+          const x = b.x * w, y = h * 0.4;
+          const on = p >= i;
+          roundRect(ctx, x - 40, y - 22, 80, 44, 10);
+          ctx.fillStyle = on ? 'rgba(82,183,136,0.22)' : 'rgba(255,255,255,0.04)';
+          ctx.fill();
+          ctx.strokeStyle = on ? '#95d5b2' : 'rgba(148,201,174,0.22)';
+          ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = '600 11px JetBrains Mono, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(b.l, x, y);
+          if (i < pipe.length - 1) {
+            const nx = pipe[i + 1].x * w;
+            ctx.strokeStyle = p > i ? 'rgba(149,213,178,0.5)' : 'rgba(148,201,174,0.2)';
+            ctx.beginPath(); ctx.moveTo(x + 40, y); ctx.lineTo(nx - 40, y); ctx.stroke();
+            if (p === i) {
+              ctx.beginPath();
+              ctx.fillStyle = '#b7e4c7';
+              ctx.arc(lerp(x + 40, nx - 40, t), y, 5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        });
+        // phone banner
+        if (p >= 3) {
+          const alpha = 0.4 + Math.sin(t * Math.PI) * 0.4;
+          roundRect(ctx, w * 0.25, h * 0.68, w * 0.5, 46, 12);
+          ctx.fillStyle = `rgba(82,183,136,${0.1 + alpha * 0.15})`;
+          ctx.fill();
+          ctx.strokeStyle = `rgba(149,213,178,${alpha})`;
+          ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = '600 13px Instrument Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('합류가 수락됐어요', w * 0.5, h * 0.68 + 23);
+        }
+      }
+
+      const drawers = {
+        auth: drawAuth,
+        court: drawCourt,
+        points: drawPoints,
+        lesson: drawLesson,
+        social: drawSocial,
+        push: drawPush
+      };
+
+      function frame(now) {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width / dpr;
+        const h = canvas.height / dpr;
+        ctx.clearRect(0, 0, w, h);
+
+        const s = systems[sel];
+        const elapsed = now - since;
+        const localT = Math.min(1, elapsed / phaseMs);
+        const et = ease(localT);
+
+        if (!reduceMotion && localT >= 1) {
+          phase = (phase + 1) % s.steps.length;
+          since = now;
+          stepsEl.querySelectorAll('.sys-step').forEach((el, j) => el.classList.toggle('on', j === phase));
+        } else {
+          stepsEl.querySelectorAll('.sys-step').forEach((el, j) => el.classList.toggle('on', j === phase));
+        }
+
+        const drawer = drawers[s.scene];
+        if (drawer) drawer(ctx, w, h, et, phase);
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    /* ---------- SCHEMA ERD ---------- */
+    const erdTables = [
+      {
+        id: 'profiles',
+        x: 520, y: 280,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['', 'student_id', 'text'],
+          ['', 'name', 'text'],
+          ['', 'membership_tier', 'enum'],
+          ['', 'points', 'int4'],
+          ['', 'elo', 'int4'],
+          ['', 'is_at_gym', 'bool'],
+          ['', 'is_coach', 'bool']
+        ],
+        role: '허브 · auth.users 1:1',
+        about: '회원 한 명의 정체성·등급·잔액·Elo·현장 여부·레슨 권한을 담는 중심 테이블입니다. 대부분의 FK가 여기로 모입니다.',
+        points: [
+          '민감 컬럼(points 등)은 클라이언트가 직접 UPDATE할 수 없음',
+          'is_at_gym은 출석 RPC·지오펜스가 갱신 → 친구 탭 정렬에 사용',
+          '013 이후 학번 신규는 보통 준회원·승인으로 생성'
+        ],
+        sql: `-- 예: 잔액은 RPC/트리거만\n-- profiles.points ↑ 직접 금지\nselect id, student_id, points, is_at_gym\nfrom profiles where id = auth.uid();`
+      },
+      {
+        id: 'courts',
+        x: 920, y: 260,
+        cols: [
+          ['◆', 'id', 'int4'],
+          ['', 'status', 'enum'],
+          ['○', 'reserved_by', 'uuid'],
+          ['', 'players', 'jsonb'],
+          ['', 'join_requests', 'jsonb'],
+          ['', 'game_mode', 'enum'],
+          ['', 'nanta_half', 'enum']
+        ],
+        role: '9코트 실시간 상태',
+        about: '체육관 3×3 맵의 소스. 예약·합류·경기 진행이 여기 한 행에 모입니다. Realtime 구독의 핵심입니다.',
+        points: [
+          'rpc_reserve_court가 status·reserved_by·포인트 차감을 원자적으로 처리',
+          'players / join_requests는 jsonb',
+          '난타(nanta)는 Elo 미반영'
+        ],
+        sql: `update courts\nset status = 'reserved',\n    reserved_by = auth.uid()\nwhere id = 5;  -- via RPC only`
+      },
+      {
+        id: 'point_transactions',
+        x: 200, y: 220,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'user_id', 'uuid'],
+          ['', 'delta', 'int4'],
+          ['', 'balance_after', 'int4'],
+          ['', 'kind', 'enum'],
+          ['', 'reason', 'text']
+        ],
+        role: '포인트 원장',
+        about: '잔액 변경의 감사 로그. 적립·차감·관리자 조정·철회가 모두 여기 기록됩니다.',
+        points: [
+          'profiles.points는 결과 캐시, 진실은 원장',
+          'revoked_at으로 운영 취소 추적',
+          '006_secure_points + guard_profile_columns'
+        ],
+        sql: `insert into point_transactions\n  (user_id, delta, balance_after, kind, reason)\nvalues (...);`
+      },
+      {
+        id: 'match_results',
+        x: 980, y: 520,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'court_id', 'int4'],
+          ['', 'team_a', 'uuid[]'],
+          ['', 'team_b', 'uuid[]'],
+          ['', 'score_a', 'int4'],
+          ['', 'winner', 'text'],
+          ['', 'status', 'enum']
+        ],
+        role: '경기 기록 · Elo',
+        about: '점수 입력 결과. 자동 Elo 반영 한도(일 8회)를 넘으면 관리자 승인(pending)으로 갑니다.',
+        points: [
+          '승 +50 / 패 +20 팀원당 (서버)',
+          'elo_changes jsonb에 상세 보존',
+          '난타는 여기 점수 반영 안 함'
+        ],
+        sql: `insert into match_results\n  (court_id, team_a, team_b, score_a, score_b, winner)\nvalues (...);`
+      },
+      {
+        id: 'friend_requests',
+        x: 160, y: 520,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'from_user_id', 'uuid'],
+          ['○', 'to_user_id', 'uuid'],
+          ['', 'status', 'text'],
+          ['', 'responded_at', 'timestamptz']
+        ],
+        role: '친구 신청',
+        about: 'pending → accepted | rejected. 수락 시 클라이언트/스토어가 즐겨찾기 관계를 반영합니다.',
+        points: ['Realtime으로 신청 알림', '관리자 탭에서도 처리 가능'],
+        sql: `update friend_requests\nset status = 'accepted'\nwhere id = $1;`
+      },
+      {
+        id: 'attendance_records',
+        x: 420, y: 80,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'user_id', 'uuid'],
+          ['', 'date', 'date'],
+          ['', 'checked_in_at', 'timestamptz']
+        ],
+        role: '일별 출석',
+        about: 'rpc_check_in 성공 시 적립. 친구 탭의 “오늘 출석” 목록에도 쓰입니다.',
+        points: ['지오펜스 필수', '정/준회원 포인트 차등'],
+        sql: `insert into attendance_records(user_id, date)\nvalues (auth.uid(), current_date);`
+      },
+      {
+        id: 'cleaning_submissions',
+        x: 680, y: 60,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'user_id', 'uuid'],
+          ['', 'kind', 'text'],
+          ['', 'area', 'text'],
+          ['', 'points', 'int4']
+        ],
+        role: '봉사 인증',
+        about: '청소·네트·콕 운반. 포인트는 서버가 결정하고 필요 시 관리자가 철회합니다.',
+        points: ['kind로 유형 구분', '월간 청소 보너스는 club_metadata'],
+        sql: `select rpc_submit_cleaning('cleaning', 'court_area');`
+      },
+      {
+        id: 'notifications',
+        x: 1180, y: 200,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'user_id', 'uuid'],
+          ['', 'title', 'text'],
+          ['', 'kind', 'text'],
+          ['', 'read_at', 'timestamptz']
+        ],
+        role: '인앱 알림 + 푸시 트리거',
+        about: 'INSERT가 Edge send-push를 태울 수 있습니다. UI 알림함은 Realtime으로 갱신됩니다.',
+        points: ['웹은 인앱만', '네이티브는 push_tokens 필요'],
+        sql: `insert into notifications(user_id, title, message, kind)\nvalues (...);  -- AFTER INSERT → Edge`
+      },
+      {
+        id: 'push_tokens',
+        x: 1260, y: 420,
+        cols: [
+          ['◆', 'token', 'text'],
+          ['○', 'user_id', 'uuid'],
+          ['', 'platform', 'text'],
+          ['', 'updated_at', 'timestamptz']
+        ],
+        role: '기기 푸시 토큰',
+        about: 'Expo push token 저장. send-push가 user_id로 조회해 Expo → FCM으로 보냅니다.',
+        points: ['게스트는 보통 미등록', '토큰이 PK'],
+        sql: `insert into push_tokens(token, user_id, platform)\nvalues ($1, auth.uid(), 'android')\non conflict (token) do update …;`
+      },
+      {
+        id: 'lesson_queue',
+        x: 880, y: 80,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'user_id', 'uuid'],
+          ['', 'position', 'int4'],
+          ['', 'status', 'text']
+        ],
+        role: '레슨 대기열',
+        about: 'waiting → next → active → done. next가 되면 사이렌·알림, 3번 코치코트.',
+        points: ['입금 승인 후 등록', 'is_coach / admin 운영'],
+        sql: `update lesson_queue set status = 'next'\nwhere id = $1;`
+      },
+      {
+        id: 'team_rooms',
+        x: 40, y: 80,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'host_id', 'uuid'],
+          ['', 'title', 'text'],
+          ['', 'members', 'jsonb'],
+          ['', 'status', 'text']
+        ],
+        role: '파트너 모집방',
+        about: '로비 탭. 인원·랭크 필터·옵션 비밀번호. 준비되면 코트 예약을 묶을 수 있습니다.',
+        points: ['members jsonb', 'open → ready → reserved'],
+        sql: `insert into team_rooms(host_id, title, members)\nvalues (...);`
+      },
+      {
+        id: 'coach_announcements',
+        x: 1180, y: 60,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'author_id', 'uuid'],
+          ['', 'title', 'text'],
+          ['', 'pinned', 'bool']
+        ],
+        role: '코치 공지',
+        about: 'is_coach 또는 admin만 작성(012_coach_access). 코칭 화면에 노출됩니다.',
+        points: ['pinned로 상단 고정'],
+        sql: `insert into coach_announcements(author_id, title, message)\nvalues (...);`
+      },
+      {
+        id: 'admin_logs',
+        x: 40, y: 360,
+        cols: [
+          ['◆', 'id', 'uuid'],
+          ['○', 'actor_id', 'uuid'],
+          ['', 'action', 'text'],
+          ['', 'category', 'text']
+        ],
+        role: '운영 감사 로그',
+        about: '관리자 액션·DB 리셋·수동 포인트 조정의 흔적입니다.',
+        points: ['meta jsonb로 부가정보'],
+        sql: `insert into admin_logs(actor_id, action, message)\nvalues (...);`
+      },
+      {
+        id: 'club_metadata',
+        x: 300, y: 700,
+        cols: [
+          ['◆', 'id', 'int4'],
+          ['', 'peak_reset_date', 'date'],
+          ['', 'last_cleaning_bonus_month', 'text']
+        ],
+        role: '싱글톤 설정',
+        about: 'id=1 한 행. 피크타임 카운터 리셋일·청소 보너스 지급 월을 추적합니다.',
+        points: ['CHECK (id = 1)'],
+        sql: `update club_metadata\nset peak_reset_date = current_date\nwhere id = 1;`
+      }
+    ];
+
+    const erdEdges = [
+      ['courts', 'profiles'],
+      ['point_transactions', 'profiles'],
+      ['match_results', 'courts'],
+      ['match_results', 'profiles'],
+      ['friend_requests', 'profiles'],
+      ['attendance_records', 'profiles'],
+      ['cleaning_submissions', 'profiles'],
+      ['notifications', 'profiles'],
+      ['push_tokens', 'profiles'],
+      ['lesson_queue', 'profiles'],
+      ['team_rooms', 'profiles'],
+      ['coach_announcements', 'profiles'],
+      ['admin_logs', 'profiles']
+    ];
+
+    function initSchema() {
+      const stage = document.getElementById('erdStage');
+      const world = document.getElementById('erdWorld');
+      const svg = document.getElementById('erdSvg');
+      const panel = document.getElementById('erdPanel');
+      const byId = Object.fromEntries(erdTables.map((t) => [t.id, t]));
+      let selected = null;
+      let scale = 0.72;
+      let panX = 40, panY = 30;
+      let mode = null; // 'pan' | 'drag'
+      let dragId = null;
+      let lastX = 0, lastY = 0;
+      let moved = false;
+
+      erdTables.forEach((t) => {
+        const el = document.createElement('div');
+        el.className = 'erd-table';
+        el.dataset.id = t.id;
+        el.style.left = t.x + 'px';
+        el.style.top = t.y + 'px';
+        el.innerHTML = `
+          <div class="erd-th"><span class="dot"></span>${t.id}</div>
+          ${t.cols.map(([m, n, ty]) =>
+            `<div class="erd-row"><span class="${m === '◆' ? 'pk' : m === '○' ? 'fk' : ''}">${m || '·'}</span><span>${n}</span><span class="ty">${ty}</span></div>`
+          ).join('')}`;
+        world.appendChild(el);
+        t.el = el;
+
+        el.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          mode = 'drag';
+          dragId = t.id;
+          moved = false;
+          lastX = e.clientX;
+          lastY = e.clientY;
+          el.classList.add('dragging');
+          el.setPointerCapture(e.pointerId);
+        });
+      });
+
+      function applyTransform() {
+        world.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+      }
+      applyTransform();
+
+      function tableCenter(t) {
+        const w = t.el.offsetWidth || 210;
+        const h = t.el.offsetHeight || 180;
+        return { x: t.x + w / 2, y: t.y + h / 2 };
+      }
+
+      function drawEdges() {
+        const parts = erdEdges.map(([a, b]) => {
+          const A = byId[a], B = byId[b];
+          if (!A || !B) return '';
+          const p = tableCenter(A), q = tableCenter(B);
+          const midX = (p.x + q.x) / 2;
+          const hot = selected && (selected === a || selected === b);
+          return `<path class="${hot ? 'hot' : ''}" d="M${p.x} ${p.y} C${midX} ${p.y}, ${midX} ${q.y}, ${q.x} ${q.y}" />`;
+        });
+        svg.innerHTML = parts.join('');
+      }
+
+      function showPanel(id) {
+        selected = id;
+        erdTables.forEach((t) => t.el.classList.toggle('selected', t.id === id));
+        const t = byId[id];
+        panel.innerHTML = `
+          <div class="role">${t.role}</div>
+          <h3>${t.id}</h3>
+          <p class="swap">${t.about}</p>
+          <ul>${t.points.map((p) => `<li>${p}</li>`).join('')}</ul>
+          <pre class="sql">${t.sql}</pre>
+          <div class="chips">${(t.cols || []).slice(0, 4).map((c) => `<span class="tag">${c[1]}</span>`).join('')}</div>`;
+        drawEdges();
+      }
+
+      function hitSelect(id) {
+        if (!moved) showPanel(id);
+      }
+
+      stage.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.erd-table')) return;
+        mode = 'pan';
+        stage.classList.add('panning');
+        lastX = e.clientX;
+        lastY = e.clientY;
+        stage.setPointerCapture(e.pointerId);
+      });
+
+      stage.addEventListener('pointermove', (e) => {
+        if (!mode) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        if (mode === 'pan') {
+          panX += dx;
+          panY += dy;
+          applyTransform();
+        } else if (mode === 'drag' && dragId) {
+          const t = byId[dragId];
+          t.x += dx / scale;
+          t.y += dy / scale;
+          t.el.style.left = t.x + 'px';
+          t.el.style.top = t.y + 'px';
+          drawEdges();
+        }
+      });
+
+      function endPointer(e) {
+        if (mode === 'drag' && dragId) {
+          byId[dragId].el.classList.remove('dragging');
+          hitSelect(dragId);
+        }
+        mode = null;
+        dragId = null;
+        stage.classList.remove('panning');
+      }
+      stage.addEventListener('pointerup', endPointer);
+      stage.addEventListener('pointercancel', endPointer);
+
+      stage.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = stage.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const prev = scale;
+        const next = Math.min(1.4, Math.max(0.45, scale * (e.deltaY > 0 ? 0.92 : 1.08)));
+        // zoom towards cursor
+        panX = mx - (mx - panX) * (next / prev);
+        panY = my - (my - panY) * (next / prev);
+        scale = next;
+        applyTransform();
+      }, { passive: false });
+
+      drawEdges();
+      requestAnimationFrame(() => {
+        drawEdges();
+        showPanel('profiles');
+      });
+    }
+
+    /* ---------- DEPLOY canvas ---------- */
+    function initDeploy() {
+      const canvas = document.getElementById('deployCanvas');
+      const nodes = [
+        { id: 'git', label: 'GitHub main', x: 0.12 },
+        { id: 'cf', label: 'Cloudflare', x: 0.38 },
+        { id: 'eas', label: 'EAS Cloud', x: 0.38 },
+        { id: 'web', label: 'Browser', x: 0.72 },
+        { id: 'apk', label: 'APK/AAB', x: 0.72 },
+        { id: 'play', label: 'Play Store', x: 0.92 }
+      ];
+      // y set in draw based on branch
+
+      function resize() { fitCanvas(canvas, 280); }
+      resize();
+      addEventListener('resize', resize);
+
+      function frame(now) {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width / dpr;
+        const h = canvas.height / dpr;
+        ctx.clearRect(0, 0, w, h);
+
+        const git = { x: w * 0.12, y: h * 0.5 };
+        const cf = { x: w * 0.4, y: h * 0.28 };
+        const eas = { x: w * 0.4, y: h * 0.72 };
+        const web = { x: w * 0.7, y: h * 0.28 };
+        const apk = { x: w * 0.7, y: h * 0.72 };
+        const play = { x: w * 0.9, y: h * 0.72 };
+        const list = [
+          [git, 'GitHub'], [cf, 'Pages'], [eas, 'EAS'], [web, 'Web'], [apk, 'APK'], [play, 'Play']
+        ];
+        const edges = [[git, cf], [git, eas], [cf, web], [eas, apk], [apk, play]];
+
+        edges.forEach(([a, b], i) => {
+          ctx.strokeStyle = 'rgba(82,183,136,0.3)';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          const t = (now / 1600 + i * 0.18) % 1;
+          ctx.beginPath();
+          ctx.fillStyle = '#95d5b2';
+          ctx.arc(lerp(a.x, b.x, t), lerp(a.y, b.y, t), 4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        list.forEach(([p, label], i) => {
+          roundRect(ctx, p.x - 48, p.y - 20, 96, 40, 12);
+          ctx.fillStyle = i === 0 ? 'rgba(82,183,136,0.25)' : 'rgba(18,40,32,0.95)';
+          ctx.fill();
+          ctx.strokeStyle = '#74c69d';
+          ctx.stroke();
+          ctx.fillStyle = '#e8f6ee';
+          ctx.font = '600 12px Instrument Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, p.x, p.y);
+        });
+
+        ctx.fillStyle = '#8fb5a1';
+        ctx.font = '500 11px JetBrains Mono, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('cloud builds only · no local eas', 16, h - 16);
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    /* boot */
+    animateCounters();
+    initHero();
+    initLoop();
+    initArch();
+    initSystems();
+    initSchema();
+    initDeploy();
+  })();
+  </script>
+</body>
+</html>
