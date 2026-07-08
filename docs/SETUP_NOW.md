@@ -1,70 +1,70 @@
-# 지금 바로 할 일 (Storage 완료 후)
+# 지금 바로 할 일 (현재 운영 상태)
 
-## 1. Confirm email 끄기 (중요!)
+**마지막 갱신**: 2026-07-08
 
-지금 보신 **Email 제공자 팝업 안에는 없습니다.** 팝업을 닫고:
-
-1. 왼쪽 **Authentication** 메뉴 유지
-2. **Providers** 말고 아래쪽 항목 중 **Sign In / Sign Up** 클릭  
-   (없으면 **Configuration** → **Sign In / Sign Up**)
-3. 여기서:
-   - **Allow new users to sign up** → **ON**
-   - **Confirm email** → **OFF**
-4. **Save**
-
-> Confirm email 이 켜져 있으면 가입할 때마다 메일을 보내서 `over_email_send_rate_limit` (429) 오류가 납니다.
-
-### Email 팝업(Providers → Email)에서 하는 것
-
-- **Enable email provider** → ON (이미 됨)
-- **Confirm email** 은 이 화면에 **없음** — 위 Sign In / Sign Up 에서 끄세요
+초기 Supabase·Storage 세팅이 끝난 뒤의 **운영·배포 체크**입니다.  
+처음부터 DB를 까는 경우 → [SUPABASE_MIGRATION.md](./SUPABASE_MIGRATION.md)
 
 ---
 
-## 2. API 키 → `.env` (2분)
+## 이미 끝난 것으로 보는 항목
 
-1. **Project Settings** (왼쪽 아래 톱니) → **API**
-2. 복사:
-   - **Project URL**
-   - **anon public** (Publishable key가 아님 — `anon` 키)
-3. 프로젝트 루트 `.env` 열어서 교체:
+- [x] DB 스키마 + `005`~`014` 보안·소셜 패치
+- [x] Storage `avatars`
+- [x] Cloudflare Pages 웹 배포
+- [x] EAS 프로젝트 연결 (`app.json` projectId)
+- [x] Firebase Android + `google-services.json`
+- [x] EAS FCM V1 서비스 계정 키
+- [x] Edge Function `send-push` 배포
+- [x] `015` 푸시 토큰 SQL (대시보드에서 실행)
 
-```env
-EXPO_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
+---
 
-4. 터미널에서 확인:
+## 웹 확인
+
+1. Cloudflare Pages에 최신 `main` 배포됐는지
+2. 환경변수: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+3. Supabase Auth → **Confirm email OFF**, Sign up ON
+4. Auth URL에 Pages 도메인 허용
 
 ```bash
 npm run setup:check
 ```
 
-`OK: Supabase env looks valid` 가 나오면 성공.
+---
+
+## 앱 / 스토어
+
+| 산출물 | Expo Builds |
+|--------|-------------|
+| 테스트 APK | preview 프로필 — Finished 후 Download |
+| 스토어 AAB | production 프로필 — Play 내부 테스트에 업로드 |
+
+스토어 문구·권한 설명: [STORE_LISTING.md](./STORE_LISTING.md)  
+개인정보처리방침: [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) · 웹 `/privacy`
 
 ---
 
-## 3. 앱 재시작
+## 관리자 1명 만들기
 
-```bash
-npx expo start -c
+신규 학번 가입은 `013` 기준 **자동 승인(준회원)** 입니다.  
+본인을 관리자로:
+
+```sql
+update public.profiles
+set membership_tier = 'admin', member_status = 'approved'
+where student_id = '본인학번';
 ```
 
----
-
-## 4. 회원가입 + 관리자 승인
-
-1. 앱 → **회원가입** (학번, 이름, 비밀번호)
-2. SQL Editor → `supabase/003_promote_admin.sql` 열어서 `본인학번` 바꾼 뒤 **Run**
-3. 앱에서 **로그인**
+(`003_promote_admin.sql` 참고)
 
 ---
 
-## 체크리스트
+## 푸시가 안 올 때
 
-- [x] DB 스키마 (`complete_after_enums.sql`)
-- [x] Storage `avatars` 버킷 + 정책
-- [ ] Confirm email OFF
-- [ ] `.env` URL + anon key
-- [ ] `npx expo start -c`
-- [ ] 회원가입 + `003_promote_admin.sql`
+1. **실기기** Android 앱 + 알림 허용
+2. 로그인 후 `push_tokens` 테이블에 토큰 있는지
+3. FCM V1이 EAS Credentials에 연결됐는지
+4. `send-push` 배포·SQL 트리거 URL/키가 맞는지
+
+상세: [PUSH_AND_PLAY_STORE.md](./PUSH_AND_PLAY_STORE.md)

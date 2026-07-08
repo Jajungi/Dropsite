@@ -1,10 +1,17 @@
 # Cloudflare Pages 배포 가이드 (Dropsite)
 
+**마지막 갱신**: 2026-07-08  
 저장소: https://github.com/Jajungi/Dropsite
+
+초기 연결이 끝난 경우: **Git push → Pages가 `main`을 자동 빌드**하면 됩니다.  
+아래는 처음 세팅하거나 빌드가 깨졌을 때 참고용입니다.
+
+개인정보 페이지: 배포 후 `https://<도메인>/privacy`  
+아키텍처: [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ---
 
-## 0단계 — GitHub에 코드 올리기 (먼저!)
+## 0단계 — GitHub에 코드 올리기 (처음 한 번)
 
 Cloudflare는 **빈 저장소로는 배포할 수 없습니다.** 아래를 터미널에서 실행하세요.
 

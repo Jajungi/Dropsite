@@ -82,7 +82,8 @@ where student_id = '본인학번';
 
 ### 6. (선택) 데모 계정 시드
 - [ ] 앱에서 `20240001`, `20230001` 등 회원가입 후 위와 같이 `approved` 처리
-- [ ] 또는 SQL `seed_demo_profiles.sql` (추후 제공) — Auth 사용자는 앱 가입이 더 안전
+- [ ] (선택) 데모 계정은 앱에서 직접 가입 — `seed_demo_profiles.sql` 은 제공하지 않음
+- [ ] 관리자 승격 SQL (`003` 또는 아래 UPDATE)
 
 ### 7. 앱 재시작
 - [ ] `npx expo start -c` (캐시 클리어 후 환경 변수 반영)
@@ -110,7 +111,9 @@ where student_id = '본인학번';
 ## 보안 설계
 
 ### 인증
-- 학번 로그인 → Supabase Auth **가상 이메일** (`{학번}@badmin.dgist.internal`)
+- 학번 로그인 → Supabase Auth **가상 이메일** (`drop-{학번}@example.com`) — `studentIdToAuthEmail` (`src/lib/supabase.ts`)
+- SQL `013` 적용 후: 신규 학번 가입은 **준회원 + approved 자동**
+- 게스트 → Anonymous Auth + `rpc_setup_guest_profile`
 - 비밀번호는 Supabase Auth가 bcrypt 처리 (클라이언트 `hashPassword` 미사용)
 - `credentials` 로컬 맵은 Supabase 모드에서 **저장하지 않음**
 
@@ -125,7 +128,18 @@ where student_id = '본인학번';
 - `friend_requests`: 본인 관련 행만, insert는 본인 발신 · 승인 회원 (007)
 - `lesson_queue`: 등록은 레슨 승인자 본인, 순번 변경은 관리자 (007)
 - `team_rooms`: 개설은 방장 본인, 참여/나가기는 승인 회원 (코트와 동일 신뢰모델) (007)
-- `coach_announcements`: 읽기는 승인 회원, 쓰기는 관리자 (007)
+- `coach_announcements`: 읽기는 승인 회원, 쓰기는 **관리자 또는 `is_coach`** (`012`)
+
+### 3-5. 이후 패치 (권장 순서)
+
+- [ ] `009` 게스트 · `010` anonymous 트리거 수정  
+- [ ] `011`/`014` DB 리셋·안전 삭제  
+- [ ] `012` 코치 권한  
+- [ ] `013` 학번 검증·자동 승인  
+- [ ] `015` / `015_push_tokens.ready.sql` 푸시 토큰 + `send-push` 배포  
+  → [PUSH_AND_PLAY_STORE.md](./PUSH_AND_PLAY_STORE.md)
+
+시스템 플로우: [ARCHITECTURE.md](./ARCHITECTURE.md)
 - **코트 예약 잠금 (008)**: `courts` 는 `guard_court_columns` 트리거로 보호 — 클라이언트는 `status='reserved'` 전환·`reserved_by` 탈취 불가. 예약은 `rpc_reserve_court`(지오펜스·비용·중복·자격·잔액 검증) 로만. 그 외(경기 시작/종료/반납/합류)는 참여자 본인만 가능
 
 ### Storage
@@ -236,8 +250,8 @@ git push -u origin main
 |------|------|
 | `relation "public.profiles" does not exist` LINE 40 | **원인**: 예전 001에서 함수가 테이블보다 먼저 생성됨 → **`supabase/complete_after_enums.sql` 실행** (001 수정됨) |
 | `type "membership_tier" already exists` | enum은 이미 있음 → `complete_after_enums.sql`만 실행 (001 전체 재실행 X) |
-| 로그인 실패 | Auth → Users에 계정 있는지, 이메일 형식 `{학번}@badmin.dgist.internal` |
-| RLS 오류 | `member_status = approved'` 인지, 관리자 승인 SQL 실행 |
+| 로그인 실패 | Auth → Users에 계정 있는지, 이메일 `drop-{학번}@example.com` |
+| RLS 오류 | `member_status = 'approved'` 인지, 관리자 SQL 실행 |
 | 코트 안 보임 | `courts` 테이블 9행 seed 되었는지 |
 | 아바타 업로드 실패 | `avatars` 버킷 + `002_storage_avatars.sql` 정책 |
 | Realtime 안 됨 | Dashboard → Database → Replication → `courts` publication |

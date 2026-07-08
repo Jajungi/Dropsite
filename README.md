@@ -122,7 +122,8 @@ Drop은 이 과정을 디지털화해서:
 | **정회원** | 회비 납부 등을 마친 정식 회원 (출석 포인트 우대) |
 | **관리자** | 운영진 — 승인·정산·경기 확정 권한 |
 
-가입은 **운영진 승인제**입니다. 승인 시 웰컴 포인트가 지급됩니다.
+가입은 SQL `013` 적용 시 **학번 신규는 준회원으로 자동 승인**됩니다.  
+관리자 승격·정지·레슨 입금 확인 등은 운영진 권한으로 처리합니다.
 
 ---
 
@@ -161,9 +162,14 @@ Drop은 이 과정을 디지털화해서:
 
 | 문서 | 내용 |
 |------|------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 사이트·백엔드 상호작용 · Mermaid 플로우 |
 | [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md) | 전체 기능 명세·구현 상태 |
-| [docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md) | Supabase 설정 체크리스트 |
-| [docs/DEPLOY_CLOUDFLARE.md](docs/DEPLOY_CLOUDFLARE.md) | Cloudflare Pages 배포 가이드 |
+| [docs/PRIVACY_POLICY.md](docs/PRIVACY_POLICY.md) | 개인정보처리방침 (웹 `/privacy`) |
+| [docs/STORE_LISTING.md](docs/STORE_LISTING.md) | Play 스토어 설명·권한 문구 |
+| [docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md) | Supabase SQL·설정 체크리스트 |
+| [docs/DEPLOY_CLOUDFLARE.md](docs/DEPLOY_CLOUDFLARE.md) | Cloudflare Pages 배포 |
+| [docs/PUSH_AND_PLAY_STORE.md](docs/PUSH_AND_PLAY_STORE.md) | 푸시·EAS·Play |
+| [docs/SETUP_NOW.md](docs/SETUP_NOW.md) | 현재 운영 체크리스트 |
 
 ### 로컬 실행
 

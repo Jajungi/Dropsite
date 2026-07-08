@@ -10,10 +10,11 @@ export function useAuthGuard() {
 
   useEffect(() => {
     if (!authHydrated) return;
-    const inAuth = segments[0] === 'login';
-    if (!isAuthenticated && !inAuth) {
+    const route = String(segments[0] ?? '');
+    const publicRoute = route === 'login' || route === 'privacy';
+    if (!isAuthenticated && !publicRoute) {
       router.replace('/login');
-    } else if (isAuthenticated && inAuth) {
+    } else if (isAuthenticated && route === 'login') {
       router.replace('/(tabs)');
     }
   }, [isAuthenticated, authHydrated, segments]);

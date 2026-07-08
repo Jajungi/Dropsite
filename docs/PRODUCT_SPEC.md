@@ -3,7 +3,7 @@
 > **유지보수 규칙**: 새 기능·화면·스토어를 추가할 때 이 문서를 함께 갱신한다.  
 > "기능 모두 구현해줘" 요청 시 이 문서의 `구현 상태`와 `상세 요구사항`을 기준으로 누락 없이 맞춘다.
 
-**마지막 갱신**: 2026-07-07
+**마지막 갱신**: 2026-07-08
 
 ---
 
@@ -28,7 +28,10 @@
 | `/lobby` | 파트너 모집 | 팀 모집방만 (친구 UI 없음) |
 | `/profile` | MY 기록 | 프로필·출석·경기·차트 |
 | `/guide` | 이용 안내 | 비활동 안내·규칙 |
-| `/admin` | (관리) | 회원 승인 등 |
+| `/admin` | (관리) | 회원·코트·포인트·DB 등 |
+| `/coaching` | (스택) | 코칭·레슨·공지 |
+| `/privacy` | (공개) | 개인정보처리방침 |
+| `/login` | — | 학번·게스트 로그인 |
 
 ---
 
@@ -85,8 +88,9 @@
 | 친구 도착 예정 시각 **굵게·크게** | ✅ | `FriendRow` |
 | 일정 탭: 타임라인 바 (두껍게) | ✅ | `FriendSchedulePanel` |
 | 친구 아닌 **오늘 출석** 동아리원 → 친구 아래 | ✅ | `attendanceRecords` + `isAtGym` |
-| 친구 추가/제거 | ✅ | `friendStore` · 친구 신청/수락/삭제 |
-| 실시간 위치/푸시 | ⬜ | 백엔드 연동 시 |
+| 친구 신청/제거 | ✅ | `friendStore` · 친구 신청/수락/삭제 |
+| 체육관 여부 실시간 반영 | ✅ | profiles Realtime + `isAtGym` |
+| 원격 푸시(합류·공지 등) | ✅ | 네이티브 + `push_tokens` / `send-push` (웹은 인앱만) |
 
 ### 데이터 규칙
 
@@ -181,6 +185,10 @@ others      = checkedIn && !friend && id !== me  // 친구 섹션 아래
 | `friendStore` | `friendStore.ts` | 친구 신청·친구 목록 |
 | `pointStore` | `pointStore.ts` | 포인트 내역 |
 | `notificationStore` | `notificationStore.ts` | 토스트·알림·경기결과 |
+| `coachingStore` | `coachingStore.ts` | 코치 공지 |
+| `adminLogStore` | `adminLogStore.ts` | 관리자 감사 로그 |
+| `adminAlertStore` | `adminAlertStore.ts` | 관리 탭 배지 |
+| `searchStore` | `searchStore.ts` | 헤더 사람 검색 |
 | `lightSourceStore` | `lightSourceStore.ts` | 마우스 그림자 |
 | `shellStore` | `shellStore.ts` | 사이드바 상태 |
 
@@ -190,18 +198,24 @@ others      = checkedIn && !friend && id !== me  // 친구 섹션 아래
 
 | 기능 | 상태 | 비고 |
 |------|------|------|
-| 같은 브라우저 탭 간 동기화 | ✅ | `crossTabSync` |
-| 개발용 동기화 서버 (REST + WS) | ✅ | `npm run server`, `EXPO_PUBLIC_SYNC_URL` |
-| **Supabase 마이그레이션** | 🟡 진행 중 | `docs/SUPABASE_MIGRATION.md` — Auth·RLS·Realtime·Storage |
-| 프로덕션 REST API | ⬜ | Supabase RPC로 대체 예정 |
-| 인앱 알림 (알림함·토스트·사이렌) | ✅ | `notificationStore`, `NotificationPanel` |
-| 원격 푸시 (합류·코치·공지) | 🟡 코드 완료 | `pushNotifications.ts` + `send-push` Edge Function. 외부 설정은 `docs/PUSH_AND_PLAY_STORE.md` |
+| 같은 브라우저 탭 간 동기화 | ✅ | `crossTabSync` (로컬/보조) |
+| 개발용 동기화 서버 (REST + WS) | ✅ | Supabase 미사용 시 폴백 (`npm run server`) |
+| **Supabase Auth·RPC·RLS·Realtime** | ✅ | `src/services/supabase`, SQL `001`~`015` |
+| 인앱 알림 (알림함·토스트·사이렌) | ✅ | `notificationStore` |
+| 원격 푸시 (합류·코치·공지) | ✅ | FCM + `send-push` — 외부 설정 [PUSH_AND_PLAY_STORE.md](./PUSH_AND_PLAY_STORE.md) |
+| 웹 배포 | ✅ | Cloudflare Pages |
+| Android 빌드 | ✅ | EAS preview/production |
 
-### 동기화 서버
+> 가입: SQL `013` 적용 후 **학번 신규 가입은 준회원으로 자동 승인**. 로컬 모드·구 데이터는 관리자 승인 UI가 남을 수 있음.
+
+아키텍처·플로우차트: [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+### 동기화 서버 (폴백)
 
 - `GET/PUT /api/sync` — 앱 상태·코트·모집방 일괄 동기화
 - `WS /ws` — 변경 시 모든 클라이언트에 broadcast
 - 데이터: `server/data.json` (개발용, gitignore)
+- **프로덕션은 Supabase Realtime을 사용**
 
 ---
 
@@ -209,6 +223,7 @@ others      = checkedIn && !friend && id !== me  // 친구 섹션 아래
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-07-08 | 아키텍처·개인정보·스토어 문구 문서, Supabase/푸시/EAS 현재 상태 반영 |
 | 2026-07-07 | Supabase 마이그레이션 설계·스키마·Auth/코트/아바타 연동 |
 | 2026-07-07 | 포인트 정책·관리자 운영/포인트 탭·동기화 서버 |
 | 2026-07-07 | 코치 레슨 신청·승인·대기열·코치코트 제한 |
