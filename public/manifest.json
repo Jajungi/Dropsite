@@ -1,12 +1,25 @@
 {
-  "name": "DI GIST 배드민턴",
-  "short_name": "배드민턴",
-  "description": "설치 없이 바로 쓰는 배드민턴 동아리 예약 앱",
+  "name": "Drop",
+  "short_name": "Drop",
+  "description": "DGIST 배드민턴 동아리 Drop — 코트 예약·출석·매칭·포인트",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F8FAF9",
+  "background_color": "#F3F8F6",
   "theme_color": "#1B4332",
   "orientation": "portrait",
   "lang": "ko",
-  "icons": []
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }

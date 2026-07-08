@@ -11,13 +11,15 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
-        <meta name="theme-color" content="#3182F6" />
+        <meta name="theme-color" content="#1B4332" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="배드민턴" />
-        <meta name="description" content="DI GIST 배드민턴 동아리 통합 예약 및 매칭 시스템" />
+        <meta name="apple-mobile-web-app-title" content="Drop" />
+        <meta name="description" content="DGIST 배드민턴 동아리 Drop — 코트 예약·출석·매칭·포인트" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" type="image/png" href="/favicon.png" />
+        <link rel="apple-touch-icon" href="/icon-192.png" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
       </head>

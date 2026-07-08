@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { formatCountdownToNext } from '@/src/services/activityTime';
 import { GuideAccordion } from '@/src/components/guide/GuideAccordion';
 import { GUIDE_SECTIONS } from '@/src/constants/guideContent';
 import { CLUB_NAME, GYM_LOCATION } from '@/src/constants';
 import { colors, spacing, typography, borderRadius } from '@/src/theme';
+
+const dropLogo = require('../../../assets/images/drop-logo.png');
 
 interface InactiveHomeProps {
   nextActivity: Date | null;
@@ -14,8 +16,8 @@ export function InactiveHome({ nextActivity }: InactiveHomeProps) {
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
-        <View style={styles.logoMark}>
-          <Text style={styles.logoText}>DG</Text>
+        <View style={styles.logoWrap}>
+          <Image source={dropLogo} style={styles.logo} resizeMode="contain" accessibilityLabel="Drop" />
         </View>
         <Text style={styles.heroTitle}>{CLUB_NAME}</Text>
         <Text style={styles.heroSub}>{GYM_LOCATION.name}</Text>
@@ -49,16 +51,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
   },
-  logoMark: {
-    width: 48,
-    height: 48,
+  logoWrap: {
+    width: 56,
+    height: 56,
     borderRadius: borderRadius.sm,
-    backgroundColor: colors.primary,
+    backgroundColor: '#1B4332',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+    overflow: 'hidden',
+    padding: 6,
   },
-  logoText: { color: colors.textLight, fontWeight: '800', fontSize: 16 },
+  logo: { width: '100%', height: '100%' },
   heroTitle: { ...typography.h2, color: colors.text, textAlign: 'center' },
   heroSub: { ...typography.caption, color: colors.textMuted, marginTop: 4 },
   scheduleBox: {

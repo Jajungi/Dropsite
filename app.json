@@ -1,19 +1,21 @@
 {
   "expo": {
-    "name": "DI GIST 배드민턴",
+    "name": "Drop",
     "slug": "badmin",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "badmin",
     "userInterfaceStyle": "light",
-    "description": "DI GIST 배드민턴 동아리 통합 예약 및 매칭 시스템",
+    "description": "DGIST 배드민턴 동아리 Drop — 코트 예약·출석·매칭·포인트·레슨",
+    "primaryColor": "#1B4332",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "kr.ac.dgist.badmin",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "체육관 현장 인증을 위해 위치 정보가 필요합니다.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "체육관 현장 인증을 위해 위치 정보가 필요합니다."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "체육관 현장 인증을 위해 위치 정보가 필요합니다.",
+        "CFBundleDisplayName": "Drop"
       }
     },
     "android": {
@@ -29,19 +31,21 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.VIBRATE",
-        "android.permission.POST_NOTIFICATIONS",
-        "android.permission.RECORD_AUDIO"
-      ]
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "versionCode": 3,
+      "label": "Drop",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png",
-      "name": "DI GIST 배드민턴",
-      "shortName": "배드민턴",
-      "description": "설치 없이 바로 쓰는 배드민턴 동아리 예약 앱",
-      "themeColor": "#3182F6",
-      "backgroundColor": "#F2F4F6",
+      "name": "Drop",
+      "shortName": "Drop",
+      "description": "DGIST 배드민턴 동아리 Drop — 코트 예약·출석·매칭·포인트",
+      "themeColor": "#1B4332",
+      "backgroundColor": "#F3F8F6",
       "display": "standalone",
       "startUrl": "/",
       "lang": "ko"
@@ -53,7 +57,8 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#1B4332"
+          "backgroundColor": "#1B4332",
+          "imageWidth": 200
         }
       ],
       [
@@ -72,8 +77,9 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/icon.png",
-          "color": "#3182F6"
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#1B4332",
+          "defaultChannel": "default"
         }
       ]
     ],
