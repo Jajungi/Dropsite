@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import type { GestureResponderEvent, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   buildSlotMarks,
@@ -41,6 +42,8 @@ export function TimeRangeSlider({
     [startHour, startMinute, endHour, endMinute, stepMinutes]
   );
   const segmentCount = Math.max(0, marks.length - 1);
+  // 칸이 많으면 라벨을 한 칸 걸러(또는 더 넓게) 표시해 겹침 방지
+  const labelStep = segmentCount > 10 ? 3 : segmentCount > 6 ? 2 : 1;
 
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(() =>
     rangeToSelectedIndices(marks, selectedStart, selectedEnd)
@@ -60,15 +63,83 @@ export function TimeRangeSlider({
     [marks, onChange]
   );
 
-  const handleSegmentPress = (index: number) => {
-    const next = new Set(selectedIndices);
-    if (next.has(index)) {
-      next.delete(index);
-    } else {
-      next.add(index);
-    }
-    applySelection(next);
-  };
+  // 드래그 페인트 선택: 첫 칸 상태로 모드 고정 (선택칸에서 시작→해제, 미선택칸에서 시작→선택)
+  const trackRef = useRef<View>(null);
+  const trackWidthRef = useRef(0);
+  const paintModeRef = useRef<null | 'add' | 'remove'>(null);
+  const workingSetRef = useRef<Set<number>>(new Set());
+  const startLocationXRef = useRef(0);
+  const hasDraggedRef = useRef(false);
+  const startIndexRef = useRef(-1);
+  const DRAG_THRESHOLD = 10;
+
+  const handleTrackLayout = useCallback((e: LayoutChangeEvent) => {
+    trackWidthRef.current = e.nativeEvent.layout.width;
+  }, []);
+
+  const indexFromLocationX = useCallback(
+    (locationX: number) => {
+      const width = trackWidthRef.current;
+      if (width <= 0 || segmentCount <= 0) return -1;
+      // 경계 오차로 옆 칸이 잡히지 않도록 중앙 기준으로 스냅
+      const clamped = Math.max(0, Math.min(width - 0.001, locationX));
+      const idx = Math.floor((clamped / width) * segmentCount);
+      return Math.max(0, Math.min(segmentCount - 1, idx));
+    },
+    [segmentCount]
+  );
+
+  const paintAt = useCallback(
+    (index: number) => {
+      if (index < 0) return;
+      const set = workingSetRef.current;
+      const mode = paintModeRef.current;
+      if (mode === 'add') {
+        if (set.has(index)) return;
+        set.add(index);
+      } else if (mode === 'remove') {
+        if (!set.has(index)) return;
+        set.delete(index);
+      } else {
+        return;
+      }
+      applySelection(new Set(set));
+    },
+    [applySelection]
+  );
+
+  const handleGrant = useCallback(
+    (e: GestureResponderEvent) => {
+      const { locationX } = e.nativeEvent;
+      const index = indexFromLocationX(locationX);
+      if (index < 0) return;
+      startLocationXRef.current = locationX;
+      startIndexRef.current = index;
+      hasDraggedRef.current = false;
+      workingSetRef.current = new Set(selectedIndices);
+      paintModeRef.current = selectedIndices.has(index) ? 'remove' : 'add';
+      paintAt(index);
+    },
+    [indexFromLocationX, paintAt, selectedIndices]
+  );
+
+  const handleMove = useCallback(
+    (e: GestureResponderEvent) => {
+      const { locationX } = e.nativeEvent;
+      if (!hasDraggedRef.current) {
+        if (Math.abs(locationX - startLocationXRef.current) < DRAG_THRESHOLD) return;
+        hasDraggedRef.current = true;
+      }
+      paintAt(indexFromLocationX(locationX));
+    },
+    [indexFromLocationX, paintAt]
+  );
+
+  const handleRelease = useCallback(() => {
+    paintModeRef.current = null;
+    hasDraggedRef.current = false;
+    startIndexRef.current = -1;
+  }, []);
 
   const isSelected = (index: number) => selectedIndices.has(index);
 
@@ -103,19 +174,39 @@ export function TimeRangeSlider({
         {timeExpanded ? (
           <View style={styles.sliderBody}>
             <View style={styles.labelsRow}>
-              {marks.slice(0, -1).map((mark) => (
-                <View key={`label-${mark}`} style={styles.labelCell}>
-                  <Text style={styles.timeLabel}>{mark}</Text>
-                </View>
-              ))}
-              <Text style={styles.timeLabelEnd}>{marks[marks.length - 1]}</Text>
+              {marks.slice(0, -1).map((mark, index) => {
+                // 라벨이 겹치지 않도록 칸이 많으면 한 칸 걸러 표시하고,
+                // 우측 끝(별도 표시되는 종료 라벨) 근처 구간은 생략해 겹침 방지
+                const showLabel = index % labelStep === 0 && index / segmentCount < 0.85;
+                return (
+                  <View key={`label-${mark}`} style={styles.labelCell}>
+                    {showLabel ? (
+                      <Text style={styles.timeLabel} numberOfLines={1}>
+                        {mark}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })}
+              <Text style={styles.timeLabelEnd} numberOfLines={1}>
+                {marks[marks.length - 1]}
+              </Text>
             </View>
 
-            <View style={styles.trackRow}>
+            <View
+              ref={trackRef}
+              style={styles.trackRow}
+              onLayout={handleTrackLayout}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={handleGrant}
+              onResponderMove={handleMove}
+              onResponderRelease={handleRelease}
+              onResponderTerminate={handleRelease}
+            >
               {Array.from({ length: segmentCount }, (_, index) => (
-                <Pressable
+                <View
                   key={`seg-${index}`}
-                  onPress={() => handleSegmentPress(index)}
                   style={[
                     styles.segment,
                     index === 0 && styles.segmentFirst,
@@ -143,7 +234,7 @@ export function TimeRangeSlider({
             {rangeSummary ? (
               <Text style={styles.rangeSummary}>{rangeSummary}</Text>
             ) : (
-              <Text style={styles.rangeHint}>칸을 탭해서 선택·해제하세요</Text>
+              <Text style={styles.rangeHint}>칸을 탭하거나, 누른 채 좌우로 드래그해 선택·해제하세요</Text>
             )}
           </View>
         ) : null}
@@ -210,7 +301,7 @@ const styles = StyleSheet.create({
   timeLabelEnd: {
     ...typography.caption,
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
     position: 'absolute',
     right: 0,
     bottom: 0,
@@ -218,7 +309,7 @@ const styles = StyleSheet.create({
   timeLabel: {
     ...typography.caption,
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   trackRow: {
     flexDirection: 'row',

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
+  ScrollView,
   StyleSheet,
   Pressable,
   Text,
@@ -73,7 +74,8 @@ export function CourtExpandView({
   myUserId,
   detailProps,
 }: CourtExpandViewProps) {
-  const { gridPadding, contentWidth, isDesktop, headerHeight, tabBarHeight } = useLayoutMode();
+  const { gridPadding, contentWidth, isDesktop, headerHeight, tabBarHeight, needsHorizontalScroll } =
+    useLayoutMode();
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const containerRef = useRef<RNView>(null);
@@ -290,15 +292,34 @@ export function CourtExpandView({
       <Animated.View
         style={[styles.gridLayer, gridStyle, { pointerEvents: selectedCourtId ? 'none' : 'auto' }]}
       >
-        <CourtGrid
-          courts={courts}
-          onCourtPress={handleCourtPress}
-          selectedCourtId={selectedCourtId}
-          filter={filter}
-          myUserId={myUserId}
-          registerCourtRef={registerCourtRef}
-          showCoachingLink={!selectedCourtId}
-        />
+        {needsHorizontalScroll ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator
+            scrollEnabled={!selectedCourtId}
+            contentContainerStyle={styles.hScrollContent}
+          >
+            <CourtGrid
+              courts={courts}
+              onCourtPress={handleCourtPress}
+              selectedCourtId={selectedCourtId}
+              filter={filter}
+              myUserId={myUserId}
+              registerCourtRef={registerCourtRef}
+              showCoachingLink={!selectedCourtId}
+            />
+          </ScrollView>
+        ) : (
+          <CourtGrid
+            courts={courts}
+            onCourtPress={handleCourtPress}
+            selectedCourtId={selectedCourtId}
+            filter={filter}
+            myUserId={myUserId}
+            registerCourtRef={registerCourtRef}
+            showCoachingLink={!selectedCourtId}
+          />
+        )}
       </Animated.View>
 
       {selectedCourt && (
@@ -369,6 +390,7 @@ export function CourtExpandView({
 const styles = StyleSheet.create({
   container: { flex: 1, minHeight: 200 },
   gridLayer: {},
+  hScrollContent: { minWidth: '100%' },
   dismissBackdrop: {
     ...StyleSheet.absoluteFill,
     zIndex: 16,

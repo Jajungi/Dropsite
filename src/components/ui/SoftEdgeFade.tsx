@@ -9,6 +9,8 @@ interface SoftEdgeFadeProps {
   fadeColor?: string;
   /** 가장자리 페이드 두께 (px) */
   size?: number;
+  /** 좌우 페이드 제거 (가로 스크롤 시 가장자리 코트가 흐려지지 않도록) */
+  disableSideFade?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -26,18 +28,20 @@ export function SoftEdgeFade({
   children,
   fadeColor = colors.surface,
   size = 26,
+  disableSideFade = false,
   style,
 }: SoftEdgeFadeProps) {
   const solid = toRgba(fadeColor, 0.92);
   const soft = toRgba(fadeColor, 0.45);
   const clear = toRgba(fadeColor, 0);
 
+  const mask = disableSideFade
+    ? 'linear-gradient(to bottom, transparent 0%, #000 6%, #000 94%, transparent 100%)'
+    : 'radial-gradient(ellipse 96% 94% at 50% 50%, #000 58%, rgba(0,0,0,0.55) 78%, transparent 100%)';
   const webVignette = Platform.select({
     web: {
-      maskImage:
-        'radial-gradient(ellipse 96% 94% at 50% 50%, #000 58%, rgba(0,0,0,0.55) 78%, transparent 100%)',
-      WebkitMaskImage:
-        'radial-gradient(ellipse 96% 94% at 50% 50%, #000 58%, rgba(0,0,0,0.55) 78%, transparent 100%)',
+      maskImage: mask,
+      WebkitMaskImage: mask,
     } as object,
     default: {},
   });
@@ -58,20 +62,24 @@ export function SoftEdgeFade({
             locations={[0, 0.45, 1]}
             style={[styles.edge, styles.bottom, { height: size, pointerEvents: 'none' }]}
           />
-          <LinearGradient
-            colors={[solid, soft, clear]}
-            locations={[0, 0.55, 1]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={[styles.edge, styles.left, { width: size, pointerEvents: 'none' }]}
-          />
-          <LinearGradient
-            colors={[clear, soft, solid]}
-            locations={[0, 0.45, 1]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={[styles.edge, styles.right, { width: size, pointerEvents: 'none' }]}
-          />
+          {!disableSideFade && (
+            <>
+              <LinearGradient
+                colors={[solid, soft, clear]}
+                locations={[0, 0.55, 1]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={[styles.edge, styles.left, { width: size, pointerEvents: 'none' }]}
+              />
+              <LinearGradient
+                colors={[clear, soft, solid]}
+                locations={[0, 0.45, 1]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={[styles.edge, styles.right, { width: size, pointerEvents: 'none' }]}
+              />
+            </>
+          )}
         </>
       )}
     </View>

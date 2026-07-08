@@ -15,6 +15,14 @@ interface GymFloorMapProps {
   cardChrome?: number;
   /** 좌측 입구 라벨 여백 */
   entranceGutter?: number;
+  /** 무대 밴드 높이 (그리드와 공유) */
+  stageH?: number;
+  /** 열 라벨 영역 높이 (그리드와 공유) */
+  headerH?: number;
+  /** 첫 코트 행 시작 y = stageH + headerH (그리드 paddingTop과 동일) */
+  contentTop?: number;
+  /** 행 사이 통로 높이 = 그리드 행 간격 */
+  aisleH?: number;
 }
 
 export function GymFloorMap({
@@ -23,16 +31,18 @@ export function GymFloorMap({
   floorWidth,
   cardChrome = 17,
   entranceGutter = 18,
+  stageH = 18,
+  headerH = 14,
+  contentTop = stageH + headerH,
+  aisleH = Math.max(6, Math.round(courtGap * 0.85)),
 }: GymFloorMapProps) {
   const ENTRANCE_GUTTER = entranceGutter;
   const colUnit = courtWidth + courtGap;
   const floorW =
     floorWidth ?? ENTRANCE_GUTTER + ROW_GUTTER + colUnit * 3 - courtGap;
   const rowUnit = cardChrome + courtWidth / (13.4 / 6.1);
-  const stageH = 18;
-  const aisleH = Math.max(6, courtGap * 0.85);
   const totalRows = GYM_COURT_ROWS.length;
-  const floorH = stageH + rowUnit * totalRows + aisleH * (totalRows - 1) + 8;
+  const floorH = contentTop + rowUnit * totalRows + aisleH * (totalRows - 1) + 8;
 
   return (
     <View style={[styles.wrap, { width: floorW, height: floorH, pointerEvents: 'none' }]}>
@@ -76,9 +86,9 @@ export function GymFloorMap({
           );
         })}
 
-        {/* 통로 (행 사이) */}
+        {/* 통로 (행 사이) — 코트 행 시작(contentTop) 기준으로 배치 */}
         {Array.from({ length: totalRows - 1 }, (_, i) => i).map((i) => {
-          const y = stageH + rowUnit * (i + 1) + aisleH * i + aisleH / 2;
+          const y = contentTop + rowUnit * (i + 1) + aisleH * i + aisleH / 2;
           return (
             <Rect
               key={`aisle-${i}`}

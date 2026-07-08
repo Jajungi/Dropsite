@@ -50,12 +50,24 @@ html, body {
   overflow-x: hidden;
 }
 
-/* 모바일 웹: 중앙 정렬 앱형 */
+/* 모바일 웹: 뷰포트에 딱 맞춘 앱형 — 페이지 전체 스크롤 대신 내부 스크롤 */
 @media (max-width: 767px) {
+  html, body {
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  #root, [data-expo-router-root] {
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
   #root > div, [data-expo-router-root] > div {
     max-width: 100%;
     margin: 0 auto;
-    overflow-x: hidden;
+    overflow: hidden;
+    height: 100%;
   }
 }
 

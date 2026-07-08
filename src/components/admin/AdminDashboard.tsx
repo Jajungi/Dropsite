@@ -1137,10 +1137,11 @@ const styles = StyleSheet.create({
   tabBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
   sectionBody: { gap: spacing.md, paddingBottom: spacing.xxl },
   dateHeading: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   statCard: {
-    width: '31%',
-    minWidth: 96,
+    // 고정 3열 — 좁은 화면에서도 세로로 무너지지 않고 글자만 작아지도록 minWidth 제거
+    width: '31.5%',
+    marginBottom: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.sm,
     padding: spacing.sm,

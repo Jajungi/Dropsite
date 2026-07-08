@@ -577,16 +577,21 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   tierText: { ...typography.small, color: colors.primary },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.lg },
-  statsGridMobile: { gap: spacing.sm, marginBottom: spacing.md },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  statsGridMobile: { marginBottom: spacing.md },
   statCard: {
-    flexGrow: 1,
-    flexBasis: '47%',
-    maxWidth: '49%',
+    // space-between 기준 고정 2열 — 좁은 화면에서도 세로로 무너지지 않음
+    width: '48%',
+    marginBottom: spacing.md,
     alignItems: 'center',
     padding: spacing.lg,
   },
-  statCardMobile: { padding: spacing.sm, flexBasis: '48%', maxWidth: '50%' },
+  statCardMobile: { padding: spacing.sm, marginBottom: spacing.sm },
   statCardPressable: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.md,

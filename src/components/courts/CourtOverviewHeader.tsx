@@ -157,6 +157,8 @@ const styles = StyleSheet.create({
   },
   wrapMobile: {
     paddingBottom: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
   headerRow: {
     flexDirection: 'row',

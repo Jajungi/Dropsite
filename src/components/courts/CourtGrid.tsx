@@ -46,35 +46,45 @@ export function CourtGrid({
     courtGap,
     gridPadding,
     gridContentHeight,
-    contentWidth,
+    gridRenderWidth,
+    needsHorizontalScroll,
     entranceGutter,
     cardHPad,
     cardChromeTop,
     cardChrome,
+    floorContentTop,
+    floorStageH,
+    floorHeaderH,
+    aisleH,
   } = useLayoutMode();
-  const floorTopInset = 30;
+  const floorTopInset = floorContentTop;
 
   return (
     <LightShadowCapture>
-      <SoftEdgeFade size={28}>
+      <SoftEdgeFade size={28} disableSideFade={needsHorizontalScroll}>
         <View
           style={[
             styles.container,
-            { paddingHorizontal: gridPadding, minHeight: gridContentHeight, width: contentWidth },
+            { paddingHorizontal: gridPadding, minHeight: gridContentHeight, width: gridRenderWidth },
+            needsHorizontalScroll && styles.containerScroll,
           ]}
         >
           <GymFloorMap
             courtWidth={courtWidth}
             courtGap={courtGap}
-            floorWidth={contentWidth}
+            floorWidth={gridRenderWidth}
             entranceGutter={entranceGutter}
             cardChrome={cardChrome}
+            stageH={floorStageH}
+            headerH={floorHeaderH}
+            contentTop={floorContentTop}
+            aisleH={aisleH}
           />
           <View style={{ paddingTop: floorTopInset }}>
             {GYM_COURT_ROWS.map((row, rowIdx) => (
               <View
                 key={rowIdx}
-                style={[styles.rowWrap, { marginBottom: courtGap }]}
+                style={[styles.rowWrap, { marginBottom: aisleH }]}
               >
                 {rowIdx === GYM_COURT_ROWS.length - 1 ? (
                   <View style={[styles.entranceCol, { width: entranceGutter }]}>
@@ -139,6 +149,12 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     overflow: 'hidden',
   },
+  containerScroll: {
+    // 가로 스크롤 시 코트가 잘리지 않도록 폭 제한·클리핑 해제
+    alignSelf: 'flex-start',
+    maxWidth: undefined,
+    overflow: 'visible',
+  },
   rowWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -169,7 +185,7 @@ const styles = StyleSheet.create({
   row: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 0,
     minWidth: 0,
   },

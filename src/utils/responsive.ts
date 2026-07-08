@@ -16,9 +16,9 @@ function scaleNum(n: number, scale: number): number {
 export function getResponsiveMetrics(width: number, isDesktop: boolean) {
   const isCompact = !isDesktop && width < 360;
   const isNarrow = !isDesktop && width < 340;
-  // 모바일은 전반적으로 살짝 작게 (기준폭에서도 0.9배 상한)
-  const scale = isDesktop ? 1 : Math.min(0.9, Math.max(0.78, (width / REF_WIDTH) * 0.9));
-  const spaceScale = isDesktop ? 1 : Math.min(0.95, Math.max(0.82, width / REF_WIDTH));
+  // 모바일은 화면 폭에 비례해 글자·간격을 축소 (데스크톱은 1)
+  const scale = isDesktop ? 1 : Math.min(0.82, Math.max(0.7, (width / REF_WIDTH) * 0.82));
+  const spaceScale = isDesktop ? 1 : Math.min(0.9, Math.max(0.78, width / REF_WIDTH));
 
   const s = (n: number) => scaleNum(n, scale);
   const sp = (n: number) => scaleNum(n, spaceScale);

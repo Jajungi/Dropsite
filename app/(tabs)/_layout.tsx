@@ -61,9 +61,9 @@ export default function TabLayout() {
   useAuthGuard();
   useActivityClock();
 
-  const tabBarHeight = 49 + insets.bottom;
-  const tabIconSize = Math.round(22 * scale);
-  const tabLabelSize = isCompact ? 9 : Math.max(9, Math.round(10 * scale));
+  const tabBarHeight = 56 + insets.bottom;
+  const tabIconSize = Math.round(24 * scale);
+  const tabLabelSize = isCompact ? 10 : Math.max(10, Math.round(11 * scale));
 
   const tabs = (
     <Tabs
@@ -75,8 +75,8 @@ export default function TabLayout() {
           : {
               ...styles.tabBar,
               height: tabBarHeight,
-              paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 8 : 4),
-              paddingTop: 6,
+              paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 10 : 6),
+              paddingTop: 8,
             },
         tabBarLabelStyle: [styles.tabLabel, { fontSize: tabLabelSize }],
         tabBarItemStyle: styles.tabItem,
