@@ -60,29 +60,9 @@ export async function fetchMatchResults(): Promise<MatchResult[]> {
   return (data ?? []).map(mapMatchRow);
 }
 
-export async function syncMatchStatsRemote(matchId: string, userIds: string[]): Promise<void> {
-  const { useAuthStore } = await import('@/src/stores/authStore');
-  const users = useAuthStore.getState().users;
-  const stats = userIds
-    .map((userId) => {
-      const user = users.find((u) => u.id === userId);
-      if (!user) return null;
-      return {
-        user_id: userId,
-        elo: user.elo,
-        rank: user.rank,
-        wins: user.wins,
-        losses: user.losses,
-        total_games: user.totalGames,
-      };
-    })
-    .filter(Boolean);
-
-  if (stats.length === 0) return;
-
+export async function syncMatchStatsRemote(matchId: string): Promise<void> {
   const { error } = await getSupabase().rpc('rpc_sync_match_stats', {
     p_match_id: matchId,
-    p_stats: stats,
   });
   if (error) throw error;
 }

@@ -230,7 +230,8 @@ type DbTeamRoom = {
   min_members: number;
   max_members: number;
   status: TeamRoom['status'];
-  password: string | null;
+  password?: string | null;
+  has_password?: boolean;
   created_at: string;
 };
 
@@ -247,18 +248,30 @@ function mapTeamRoom(r: DbTeamRoom): TeamRoom {
     maxMembers: r.max_members,
     status: r.status,
     createdAt: r.created_at,
-    ...(r.password ? { password: r.password } : {}),
+    hasPassword: Boolean(r.has_password ?? r.password),
   } as TeamRoom;
 }
 
 export async function fetchTeamRooms(): Promise<TeamRoom[]> {
   const { data, error } = await getSupabase()
-    .from('team_rooms')
+    .from('team_rooms_public')
     .select('*')
     .neq('status', 'closed')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data as DbTeamRoom[]).map(mapTeamRoom);
+}
+
+export async function verifyTeamRoomPasswordRemote(
+  roomId: string,
+  password?: string
+): Promise<boolean> {
+  const { data, error } = await getSupabase().rpc('rpc_verify_team_room_password', {
+    p_room_id: roomId,
+    p_password: password ?? null,
+  });
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export async function insertTeamRoomRemote(room: TeamRoom): Promise<string | null> {

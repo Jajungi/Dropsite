@@ -29,8 +29,8 @@ type NotificationSet = (
 ) => void;
 
 /** 랭크전 확정/철회 후 대상 회원 전적·엘로를 프로필에 반영 */
-function syncMatchStatsRemote(matchId: string, userIds: string[]) {
-  if (!isSupabaseEnabled() || userIds.length === 0) return;
+function syncMatchStatsRemote(matchId: string) {
+  if (!isSupabaseEnabled()) return;
   runWhenRemoteId(
     () => {
       const state = useNotificationStore.getState();
@@ -42,7 +42,7 @@ function syncMatchStatsRemote(matchId: string, userIds: string[]) {
     },
     (remoteId) =>
       import('@/src/services/supabase/matches').then(({ syncMatchStatsRemote: sync }) =>
-        sync(remoteId, userIds)
+        sync(remoteId)
       )
   );
 }
@@ -380,7 +380,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       ),
     }));
     syncMatchPatchRemote(matchId, patch);
-    if (rated) syncMatchStatsRemote(matchId, [...winners, ...losers]);
+    if (rated) syncMatchStatsRemote(matchId);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.confirm',
@@ -462,7 +462,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
       ),
     }));
     syncMatchPatchRemote(matchId, patch);
-    if (rated) syncMatchStatsRemote(matchId, [...winners, ...losers]);
+    if (rated) syncMatchStatsRemote(matchId);
     recordAdminLogAsActor(adminId, {
       category: 'match',
       action: 'match.revoke',
@@ -574,7 +574,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
           })
         )
         .catch((err) => console.warn('[match] insert failed', err));
-      if (applyNow) syncMatchStatsRemote(matchId, participants);
+      if (applyNow) syncMatchStatsRemote(matchId);
     }
     persistAppState();
 

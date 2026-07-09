@@ -40,6 +40,11 @@ interface LobbyState {
     member: TeamMember,
     password?: string
   ) => { success: boolean; message: string };
+  verifyAndJoinRoom: (
+    roomId: string,
+    member: TeamMember,
+    password?: string
+  ) => Promise<{ success: boolean; message: string }>;
   leaveRoom: (roomId: string, userId: string) => void;
   markRoomReserved: (roomId: string, courtId: number) => void;
   adminCloseRoom: (roomId: string) => { success: boolean; message: string };
@@ -85,6 +90,7 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
       status: 'open',
       createdAt: new Date().toISOString(),
       password: params.password || undefined,
+      hasPassword: Boolean(params.password),
     };
     const rooms = [newRoom, ...get().rooms];
     set({ rooms });
@@ -109,8 +115,8 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
   joinRoom: (roomId, member, password) => {
     const room = get().rooms.find((r) => r.id === roomId);
     if (!room) return { success: false, message: '방을 찾을 수 없어요.' };
-    if (room.password && room.password !== password) {
-      return { success: false, message: '비밀번호가 일치하지 않아요.' };
+    if (room.hasPassword && !password) {
+      return { success: false, message: '비밀번호가 필요해요.' };
     }
     if (room.members.length >= room.maxMembers) {
       return { success: false, message: '방이 가득 찼어요.' };
@@ -140,6 +146,26 @@ export const useLobbyStore = create<LobbyState>((set, get) => ({
       );
     }
     return { success: true, message: '방에 참여했어요!' };
+  },
+
+  verifyAndJoinRoom: async (roomId, member, password) => {
+    const room = get().rooms.find((r) => r.id === roomId);
+    if (!room) return { success: false, message: '방을 찾을 수 없어요.' };
+
+    if (room.hasPassword) {
+      if (!isSupabaseEnabled()) {
+        return get().joinRoom(roomId, member, password);
+      }
+      try {
+        const { verifyTeamRoomPasswordRemote } = await import('@/src/services/supabase/social');
+        const ok = await verifyTeamRoomPasswordRemote(roomId, password);
+        if (!ok) return { success: false, message: '비밀번호가 일치하지 않아요.' };
+      } catch {
+        return { success: false, message: '비밀번호 확인에 실패했어요.' };
+      }
+    }
+
+    return get().joinRoom(roomId, member, password);
   },
 
   leaveRoom: (roomId, userId) => {

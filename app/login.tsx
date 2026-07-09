@@ -63,7 +63,6 @@ export default function LoginScreen() {
       await saveSavedLogin({
         studentId: id.trim(),
         name: displayName ?? user?.name ?? id,
-        password: pw,
       });
       router.replace('/(tabs)');
     } else {
@@ -82,7 +81,12 @@ export default function LoginScreen() {
 
   const handleSavedLogin = () => {
     if (!savedAccount) return;
-    void completeLogin(savedAccount.studentId, savedAccount.password, savedAccount.name);
+    setStudentId(savedAccount.studentId);
+    setPassword('');
+    setShowSavedPrompt(false);
+    if (!password.trim()) {
+      showToast({ type: 'info', title: '', message: '비밀번호를 입력한 뒤 로그인해 주세요.' });
+    }
   };
 
   const handleUseOtherAccount = () => {
@@ -196,7 +200,7 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.savedQuestion}>기존 계정으로 로그인하시겠습니까?</Text>
               <View style={styles.savedActions}>
-                <Button title="로그인" onPress={handleSavedLogin} size="sm" style={styles.savedBtn} />
+                <Button title="선택" onPress={handleSavedLogin} size="sm" style={styles.savedBtn} />
                 <Button
                   title="다른 계정"
                   onPress={handleUseOtherAccount}

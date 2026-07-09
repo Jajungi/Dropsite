@@ -27,7 +27,7 @@ export default function LobbyScreen() {
   useGeoLocation();
 
   const rooms = useLobbyStore((s) => s.rooms);
-  const joinRoom = useLobbyStore((s) => s.joinRoom);
+  const verifyAndJoinRoom = useLobbyStore((s) => s.verifyAndJoinRoom);
   const createRoom = useLobbyStore((s) => s.createRoom);
   const leaveRoom = useLobbyStore((s) => s.leaveRoom);
   const markRoomReserved = useLobbyStore((s) => s.markRoomReserved);
@@ -57,31 +57,33 @@ export default function LobbyScreen() {
       showToast({ type: 'warning', title: '', message: '체육관 도착 후 참여할 수 있어요.' });
       return;
     }
-    const result = joinRoom(
-      roomId,
-      {
-        userId: currentUser.id,
-        name: currentUser.name,
-        rank: currentUser.rank,
-        avatarColor: currentUser.avatarColor,
-      },
-      password
-    );
-    if (result.success) {
-      setJoinTargetId(null);
-      setJoinPassword('');
-    }
-    showToast({
-      type: result.success ? 'success' : 'warning',
-      title: '',
-      message: result.message,
-    });
+    void (async () => {
+      const result = await verifyAndJoinRoom(
+        roomId,
+        {
+          userId: currentUser.id,
+          name: currentUser.name,
+          rank: currentUser.rank,
+          avatarColor: currentUser.avatarColor,
+        },
+        password
+      );
+      if (result.success) {
+        setJoinTargetId(null);
+        setJoinPassword('');
+      }
+      showToast({
+        type: result.success ? 'success' : 'warning',
+        title: '',
+        message: result.message,
+      });
+    })();
   };
 
   const handleJoinPress = (roomId: string) => {
     const room = rooms.find((r) => r.id === roomId);
     if (!room) return;
-    if (room.password) {
+    if (room.hasPassword) {
       setJoinTargetId(roomId);
       setJoinPassword('');
       return;

@@ -26,15 +26,31 @@ function mapNotificationRow(row: DbNotification): AppNotification {
   };
 }
 
-/** 알림 insert — targetUserId 없는 브로드캐스트(레거시)는 원격 저장하지 않음 */
+/** 알림 전송 — 타인에게는 rpc_send_notification 사용 */
 export async function insertNotificationRemote(n: AppNotification): Promise<void> {
   if (!n.targetUserId) return;
-  const { error } = await getSupabase().from('notifications').insert({
-    user_id: n.targetUserId,
-    title: n.title,
-    message: n.message,
-    kind: n.type,
-    court_id: n.courtId ?? null,
+
+  const { data: session } = await getSupabase().auth.getSession();
+  const actorId = session.session?.user.id;
+
+  if (actorId && n.targetUserId === actorId) {
+    const { error } = await getSupabase().from('notifications').insert({
+      user_id: n.targetUserId,
+      title: n.title,
+      message: n.message,
+      kind: n.type,
+      court_id: n.courtId ?? null,
+    });
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await getSupabase().rpc('rpc_send_notification', {
+    p_target_user_id: n.targetUserId,
+    p_title: n.title,
+    p_message: n.message,
+    p_kind: n.type,
+    p_court_id: n.courtId ?? null,
   });
   if (error) throw error;
 }

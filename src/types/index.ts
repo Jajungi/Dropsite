@@ -105,8 +105,9 @@ export interface TeamRoom {
   status: 'open' | 'ready' | 'reserved' | 'closed';
   createdAt: string;
   isHot?: boolean;
-  /** 설정 시 참여 시 비밀번호 필요 */
+  /** 설정 시 참여 시 비밀번호 필요 (목록 조회 시에는 hasPassword만 노출) */
   password?: string;
+  hasPassword?: boolean;
 }
 
 export interface TeamMember {

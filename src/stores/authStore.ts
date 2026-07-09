@@ -646,12 +646,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = get().users.find((u) => u.id === userId);
     if (user) {
       const pts = getAttendancePoints(user.membershipTier);
-      // 로컬 낙관적 반영 (서버 포인트는 rpc_check_in / 관리자 대리 경로가 처리)
-      applyPointChangeLocalOnly(userId, pts, 'check_in', '체육관 출석 인증 (500m 내)');
+      const isSelf = get().currentUser?.id === userId;
+      const isAdminProxy = isSupabaseEnabled() && !isSelf;
+
+      if (!isAdminProxy) {
+        applyPointChangeLocalOnly(userId, pts, 'check_in', '체육관 출석 인증 (500m 내)');
+      }
       get().setUserAtGym(userId, true);
 
       if (isSupabaseEnabled()) {
-        const isSelf = get().currentUser?.id === userId;
         if (isSelf) {
           const loc = useAppStore.getState().location;
           import('@/src/services/supabase/points')
@@ -665,15 +668,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             )
             .catch((err) => console.warn('[attendance] check-in failed', err));
         } else {
-          // 관리자 대리 출석: 출석 insert + 포인트 적립(관리자 권한)
           import('@/src/services/supabase/attendance')
-            .then(({ insertAttendanceRemote }) => insertAttendanceRemote(userId, today))
-            .catch((err) => console.warn('[attendance] admin insert failed', err));
-          import('@/src/services/supabase/points')
-            .then(({ adjustPointsRemote }) =>
-              adjustPointsRemote(userId, pts, 'check_in', '관리자 대리 출석')
+            .then(({ adminCheckInRemote }) => adminCheckInRemote(userId))
+            .then(() =>
+              Promise.all([
+                import('@/src/services/supabase/attendance').then(({ fetchAttendance }) =>
+                  fetchAttendance(userId).then((records) =>
+                    useAuthStore.setState({ attendanceRecords: records })
+                  )
+                ),
+                import('@/src/services/supabase/points').then(({ fetchPointTransactions }) =>
+                  fetchPointTransactions(userId).then((txs) =>
+                    import('@/src/stores/pointStore').then(({ usePointStore }) =>
+                      usePointStore.getState().hydrate(txs)
+                    )
+                  )
+                ),
+              ])
             )
-            .catch((err) => console.warn('[attendance] admin award failed', err));
+            .catch((err) => console.warn('[attendance] admin check-in failed', err));
         }
       }
     }

@@ -6,17 +6,12 @@ const LEGACY_QUICK_LOGIN_KEY = '@badmin/quick-login';
 export interface SavedLoginAccount {
   studentId: string;
   name: string;
-  password: string;
 }
 
 function isValidAccount(value: unknown): value is SavedLoginAccount {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  return (
-    typeof v.studentId === 'string' &&
-    typeof v.name === 'string' &&
-    typeof v.password === 'string'
-  );
+  return typeof v.studentId === 'string' && typeof v.name === 'string';
 }
 
 async function migrateLegacyEntries(): Promise<SavedLoginAccount | null> {
@@ -24,9 +19,12 @@ async function migrateLegacyEntries(): Promise<SavedLoginAccount | null> {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed) && parsed.length > 0 && isValidAccount(parsed[0])) {
-      await AsyncStorage.removeItem(LEGACY_QUICK_LOGIN_KEY);
-      return parsed[0];
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const first = parsed[0] as Record<string, unknown>;
+      if (typeof first.studentId === 'string' && typeof first.name === 'string') {
+        await AsyncStorage.removeItem(LEGACY_QUICK_LOGIN_KEY);
+        return { studentId: first.studentId, name: first.name };
+      }
     }
   } catch {
     /* ignore */
@@ -34,7 +32,7 @@ async function migrateLegacyEntries(): Promise<SavedLoginAccount | null> {
   return null;
 }
 
-/** 이 기기에 저장된 마지막 로그인 계정 (1개) */
+/** 이 기기에 저장된 마지막 로그인 계정 (비밀번호는 저장하지 않음) */
 export async function loadSavedLogin(): Promise<SavedLoginAccount | null> {
   const raw = await AsyncStorage.getItem(SAVED_LOGIN_KEY);
   if (raw) {

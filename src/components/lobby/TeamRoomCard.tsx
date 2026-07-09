@@ -39,7 +39,7 @@ export function TeamRoomCard({
         <Text style={styles.title} numberOfLines={1}>
           {room.title}
         </Text>
-        {room.password && (
+        {room.hasPassword && (
           <View style={styles.lockBadge}>
             <Text style={styles.lockText}>비밀방</Text>
           </View>

@@ -2,14 +2,6 @@ import { getSupabase } from '@/src/lib/supabase';
 import { mapAttendanceRow } from './mappers';
 import type { AttendanceRecord } from '@/src/types';
 
-/** 오늘 출석 기록 insert (unique(user_id, date) 로 중복 방지) */
-export async function insertAttendanceRemote(userId: string, date: string): Promise<void> {
-  const { error } = await getSupabase()
-    .from('attendance_records')
-    .insert({ user_id: userId, date });
-  if (error) throw error;
-}
-
 export async function fetchAttendance(userId: string): Promise<AttendanceRecord[]> {
   const { data, error } = await getSupabase()
     .from('attendance_records')
@@ -55,6 +47,15 @@ export async function revokeAttendanceRemote(params: {
 
   const { error } = await client.from('attendance_records').delete().eq('id', params.recordId);
   if (error) throw error;
+}
+
+/** 관리자 대리 출석 — rpc_admin_check_in (지오펜스 없음) */
+export async function adminCheckInRemote(userId: string): Promise<number> {
+  const { data, error } = await getSupabase().rpc('rpc_admin_check_in', {
+    p_user_id: userId,
+  });
+  if (error) throw error;
+  return (data as number) ?? 0;
 }
 
 export function subscribeAllAttendance(onChange: () => void): () => void {

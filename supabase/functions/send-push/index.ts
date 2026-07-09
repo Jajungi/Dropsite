@@ -4,27 +4,40 @@
 //
 // 배포:
 //   supabase functions deploy send-push
-// 시크릿(선택, Expo 푸시 보안 강화 시):
-//   supabase secrets set EXPO_ACCESS_TOKEN=xxxx
-//
-// 이 함수는 service_role 키로 DB에 접근하므로 트리거/웹훅에서만 호출하세요.
+// 시크릿:
+//   supabase secrets set PUSH_WEBHOOK_SECRET=xxxx
+//   (선택) supabase secrets set EXPO_ACCESS_TOKEN=xxxx
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const EXPO_ACCESS_TOKEN = Deno.env.get('EXPO_ACCESS_TOKEN'); // optional
+const PUSH_WEBHOOK_SECRET = Deno.env.get('PUSH_WEBHOOK_SECRET');
+const EXPO_ACCESS_TOKEN = Deno.env.get('EXPO_ACCESS_TOKEN');
 
 interface Payload {
   user_id?: string;
   title?: string;
   message?: string;
   kind?: string;
-  // Database Webhook 형식 지원
   record?: { user_id?: string; title?: string; message?: string; kind?: string };
 }
 
+function isAuthorized(req: Request): boolean {
+  const auth = req.headers.get('Authorization') ?? '';
+  const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (bearer && bearer === SERVICE_ROLE_KEY) return true;
+  if (PUSH_WEBHOOK_SECRET && bearer === PUSH_WEBHOOK_SECRET) return true;
+  const secretHeader = req.headers.get('X-Push-Webhook-Secret');
+  if (PUSH_WEBHOOK_SECRET && secretHeader === PUSH_WEBHOOK_SECRET) return true;
+  return false;
+}
+
 Deno.serve(async (req) => {
+  if (!isAuthorized(req)) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 });
+  }
+
   try {
     const body = (await req.json()) as Payload;
     const rec = body.record ?? body;
